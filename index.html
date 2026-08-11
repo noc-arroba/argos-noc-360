@@ -1,0 +1,1859 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>NOC // Painel de Monitoria de Rede</title>
+<style>
+:root{
+  --bg: #090D12;
+  --panel: #10161D;
+  --panel-2: #151D26;
+  --line: #212B36;
+  --line-soft: #1A222C;
+  --text: #DCE6EF;
+  --muted: #6C7C8C;
+  --muted-2: #4E5B69;
+  --ok: #34D399;
+  --warn: #F0A63A;
+  --crit: #F0454F;
+  --data: #4FA3E3;
+  --violet: #A78BFA;
+  --mono: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: 'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  background-image:
+    radial-gradient(circle at 15% 0%, rgba(79,163,227,0.06), transparent 42%),
+    radial-gradient(circle at 95% 20%, rgba(52,211,153,0.05), transparent 40%),
+    radial-gradient(circle at 60% 100%, rgba(167,139,250,0.04), transparent 45%);
+}
+.wrap{ max-width: 1600px; margin: 0 auto; padding: 16px; }
+a{ color:inherit; }
+
+/* ---- Top bar ---- */
+.topbar{
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+  padding: 12px 18px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px;
+  margin-bottom: 14px;
+}
+.brand{ display:flex; align-items:center; gap:10px; }
+.brand .dot{ width:9px; height:9px; border-radius:50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: pulse 2s infinite; }
+.brand h1{ font-family: var(--mono); font-size: 14px; letter-spacing: 1.5px; font-weight:600; }
+.brand span{ color: var(--muted); font-family: var(--mono); font-size: 11px; }
+.top-stats{ display:flex; gap: 24px; flex-wrap:wrap; }
+.top-stat{ text-align:right; }
+.top-stat .v{ font-family: var(--mono); font-size: 16px; font-weight:600; }
+.top-stat .l{ color: var(--muted); font-size: 10px; text-transform:uppercase; letter-spacing: 1px; }
+.top-stat.crit .v{ color: var(--crit); }
+.top-stat.warn .v{ color: var(--warn); }
+.top-stat.ok .v{ color: var(--ok); }
+#clock{ font-family: var(--mono); color: var(--muted); font-size:12px; }
+
+/* ---- Layout ---- */
+.layout{
+  display:grid;
+  grid-template-columns: 250px 1fr 330px;
+  gap: 14px;
+  align-items:start;
+}
+.col{ display:flex; flex-direction:column; gap:14px; }
+.panel{
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+}
+.panel h2{
+  font-family: var(--mono); font-size: 11px; letter-spacing: 1.2px;
+  color: var(--muted); text-transform: uppercase; margin-bottom: 12px;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.panel h2 .tag{ font-size:10px; padding:2px 7px; border-radius:20px; background: var(--panel-2); color: var(--muted-2); letter-spacing:0.5px; }
+
+/* ---- Gauges (capacidade) ---- */
+.gauge-row{ display:flex; gap:10px; margin-bottom:4px; }
+.gauge{ flex:1; text-align:center; }
+.gauge .ring{ width:56px; height:56px; margin:0 auto 6px; }
+.gauge .label{ font-size:9.5px; color: var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
+.gauge .val{ font-family: var(--mono); font-size:12px; margin-top:2px; }
+
+/* ---- Device list ---- */
+.device{
+  display:flex; align-items:center; gap:9px;
+  padding: 7px 4px; border-radius: 6px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.device:last-child{ border-bottom:none; }
+.device:hover{ background: var(--panel-2); }
+.status-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.status-dot.ok{ background: var(--ok); box-shadow:0 0 6px var(--ok);}
+.status-dot.warn{ background: var(--warn); box-shadow:0 0 6px var(--warn);}
+.status-dot.crit{ background: var(--crit); box-shadow:0 0 6px var(--crit); animation: blink 1s infinite;}
+.dev-info{ flex:1; min-width:0; }
+.dev-name{ font-family: var(--mono); font-size:11.5px; }
+.dev-meta{ color: var(--muted); font-size:10px; }
+.dev-cpu{ font-family: var(--mono); font-size:10.5px; color: var(--muted); text-align:right; }
+.dev-cpu b{ color: var(--text); }
+
+/* ---- Charts ---- */
+.charts-row{ display:grid; grid-template-columns: repeat(3, 1fr); gap:14px; }
+.chart-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+.chart-val{ font-family: var(--mono); font-size:19px; font-weight:600; }
+.chart-val small{ font-size:10.5px; color: var(--muted); font-weight:400; }
+.chart-delta{ font-family: var(--mono); font-size:10.5px; }
+.chart-delta.up{ color: var(--crit); }
+.chart-delta.down{ color: var(--ok); }
+svg.line{ width:100%; height:72px; display:block; }
+
+/* ---- Topology ---- */
+.node{ fill: var(--panel-2); stroke: var(--line); stroke-width:1.5; }
+.node-label{ font-family: var(--mono); font-size:10px; fill: var(--text); }
+.node-sub{ font-family: var(--mono); font-size:8.5px; fill: var(--muted); }
+.link{ stroke: var(--line); stroke-width:2; fill:none; }
+.link.warn{ stroke: var(--warn); }
+.link.crit{ stroke: var(--crit); stroke-dasharray: 4 4; }
+.link-label{ font-family: var(--mono); font-size:8px; fill: var(--muted); }
+
+/* ---- Port grid ---- */
+.portgrid-wrap{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.portgrid{ display:grid; grid-template-columns: repeat(12, 1fr); gap:5px; flex:1; min-width:260px; }
+.port{ aspect-ratio:1; border-radius:3px; background: var(--ok); position:relative; }
+.port.down{ background: var(--line); }
+.port.err{ background: var(--warn); }
+.port.crit{ background: var(--crit); }
+.port::after{ content: attr(data-n); position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:6.5px; color: rgba(0,0,0,0.55); }
+.legend{ display:flex; flex-direction:column; gap:6px; font-family: var(--mono); font-size:10.5px; color: var(--muted); }
+.legend .li{ display:flex; align-items:center; gap:6px; }
+.legend .sw{ width:10px; height:10px; border-radius:3px; }
+
+/* ---- Table (top talkers) ---- */
+table{ width:100%; border-collapse: collapse; font-family: var(--mono); font-size:11px; }
+th{ text-align:left; color: var(--muted); font-weight:500; font-size:10px; text-transform:uppercase; letter-spacing:0.5px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+td{ padding:7px 0; border-bottom: 1px solid var(--line-soft); }
+tr:last-child td{ border-bottom:none; }
+.bar-bg{ background: var(--panel-2); border-radius:3px; height:5px; width:100%; overflow:hidden; margin-top:4px;}
+.bar-fg{ height:100%; background: var(--data); border-radius:3px; }
+
+/* ---- Incident cards ---- */
+.incident{ padding:9px 0; border-bottom:1px solid var(--line-soft); }
+.incident:last-child{ border-bottom:none; }
+.incident-top{ display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; }
+.incident-id{ font-family: var(--mono); font-size:10px; color: var(--muted); }
+.incident-msg{ font-size:11.5px; margin-bottom:4px; }
+.incident-meta{ display:flex; justify-content:space-between; font-family: var(--mono); font-size:10px; color: var(--muted); }
+.badge{ font-size:9px; padding:1.5px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; font-weight:600;}
+.badge.crit{ background: rgba(240,69,79,0.15); color: var(--crit); }
+.badge.warn{ background: rgba(240,166,58,0.15); color: var(--warn); }
+.badge.info{ background: rgba(79,163,227,0.15); color: var(--data); }
+.badge.ok{ background: rgba(52,211,153,0.15); color: var(--ok); }
+
+/* ---- SLA list ---- */
+.sla-row{ display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--line-soft);}
+.sla-row:last-child{ border-bottom:none; }
+.sla-name{ flex:1; font-family: var(--mono); font-size:11px; }
+.sla-target{ font-size:9.5px; color: var(--muted); }
+.sla-val{ font-family: var(--mono); font-size:12px; font-weight:600; }
+
+/* ---- Security ---- */
+.sec-stat-row{ display:flex; gap:10px; margin-bottom:10px; }
+.sec-stat{ flex:1; background: var(--panel-2); border-radius:8px; padding:8px 10px; }
+.sec-stat .v{ font-family: var(--mono); font-size:16px; font-weight:600; }
+.sec-stat .l{ font-size:9.5px; color: var(--muted); text-transform:uppercase; }
+.iplist{ font-family: var(--mono); font-size:10.5px; }
+.iplist div{ display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--line-soft); color: var(--muted); }
+.iplist div:last-child{ border-bottom:none; }
+.iplist span:last-child{ color: var(--crit); }
+
+/* ---- Maintenance / On-call ---- */
+.mw-item{ padding:8px 0; border-bottom:1px solid var(--line-soft); }
+.mw-item:last-child{ border-bottom:none; }
+.mw-title{ font-size:11.5px; margin-bottom:2px; }
+.mw-time{ font-family: var(--mono); font-size:10px; color: var(--data); }
+.oncall{ display:flex; align-items:center; gap:10px; }
+.avatar{ width:36px; height:36px; border-radius:50%; background: linear-gradient(135deg, var(--data), var(--violet)); flex-shrink:0; }
+.oncall-name{ font-size:12px; font-weight:600; }
+.oncall-role{ font-size:10px; color: var(--muted); }
+.escalation{ margin-top:10px; font-family: var(--mono); font-size:10px; color: var(--muted); }
+.escalation b{ color: var(--text); }
+
+/* ---- Heatmap 24h ---- */
+.heatmap{ display:grid; grid-template-columns: repeat(24, 1fr); gap:3px; margin-top:6px; }
+.hm-cell{ aspect-ratio:1; border-radius:2px; }
+
+/* ---- Ticker ---- */
+.ticker{
+  margin-top:14px; background: var(--panel); border:1px solid var(--line); border-radius:10px;
+  padding: 8px 0; overflow:hidden; white-space:nowrap; position:relative;
+}
+.ticker::before, .ticker::after{ content:''; position:absolute; top:0; bottom:0; width:40px; z-index:2; }
+.ticker::before{ left:0; background: linear-gradient(90deg, var(--panel), transparent); }
+.ticker::after{ right:0; background: linear-gradient(270deg, var(--panel), transparent); }
+.ticker-track{ display:inline-block; font-family: var(--mono); font-size:11px; color: var(--muted); animation: scroll 32s linear infinite; padding-left:100%; }
+.ticker-track span{ margin-right: 40px; }
+.ticker-track span b{ color: var(--data); }
+
+/* ---- Nav de âncoras ---- */
+.subnav{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+.subnav a{ font-family: var(--mono); font-size:10.5px; text-decoration:none; color: var(--muted);
+  background: var(--panel); border:1px solid var(--line); padding:6px 12px; border-radius:20px; letter-spacing:0.3px; }
+.subnav a:hover{ color: var(--text); border-color: var(--data); }
+
+/* ---- Seções full width ---- */
+.section{ margin-bottom:14px; scroll-margin-top: 14px; }
+.section-title{ display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+.section-title h3{ font-family: var(--mono); font-size:13px; letter-spacing:1px; text-transform:uppercase; }
+.section-title .sub{ color: var(--muted); font-size:11px; }
+.section-grid3{ display:grid; grid-template-columns: 1.3fr 1fr 1fr; gap:14px; }
+.section-grid4{ display:grid; grid-template-columns: repeat(4, 1fr); gap:14px; }
+@media (max-width:1200px){ .section-grid3, .section-grid4{ grid-template-columns: 1fr; } }
+
+/* ---- Forecast chart ---- */
+.forecast-item{ margin-bottom:16px; }
+.forecast-item:last-child{ margin-bottom:0; }
+.forecast-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
+.forecast-head .name{ font-family: var(--mono); font-size:11.5px; }
+.forecast-head .eta{ font-family: var(--mono); font-size:10.5px; padding:2px 8px; border-radius:12px; }
+.forecast-head .eta.crit{ background: rgba(240,69,79,0.15); color: var(--crit); }
+.forecast-head .eta.warn{ background: rgba(240,166,58,0.15); color: var(--warn); }
+.forecast-head .eta.ok{ background: rgba(52,211,153,0.15); color: var(--ok); }
+svg.forecast{ width:100%; height:64px; display:block; }
+.hist{ fill:none; stroke-width:1.6; }
+.proj{ fill:none; stroke-width:1.6; stroke-dasharray: 3 3; }
+.threshold-line{ stroke: var(--muted-2); stroke-width:1; stroke-dasharray: 2 3; }
+
+/* ---- Anomalias ---- */
+.anomaly{ padding:9px 0; border-bottom:1px solid var(--line-soft); }
+.anomaly:last-child{ border-bottom:none; }
+.anomaly-top{ display:flex; justify-content:space-between; margin-bottom:2px; }
+.anomaly-dev{ font-family: var(--mono); font-size:11px; }
+.anomaly-desc{ font-size:11px; color: var(--muted); line-height:1.4; }
+.anomaly-score{ font-family: var(--mono); font-size:10px; }
+
+/* ---- Recomendações ---- */
+.reco{ display:flex; gap:10px; padding:9px 0; border-bottom:1px solid var(--line-soft); }
+.reco:last-child{ border-bottom:none; }
+.reco-priority{ font-family: var(--mono); font-size:9px; padding:2px 6px; border-radius:4px; height:fit-content; flex-shrink:0; text-transform:uppercase; }
+.reco-priority.alta{ background: rgba(240,69,79,0.15); color: var(--crit); }
+.reco-priority.media{ background: rgba(240,166,58,0.15); color: var(--warn); }
+.reco-priority.baixa{ background: rgba(79,163,227,0.15); color: var(--data); }
+.reco-text{ font-size:11.5px; line-height:1.4; }
+.reco-text .deadline{ display:block; font-family: var(--mono); font-size:10px; color: var(--muted); margin-top:2px; }
+
+/* ---- Risk ranking ---- */
+.risk-row{ display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--line-soft); }
+.risk-row:last-child{ border-bottom:none; }
+.risk-name{ flex:1; font-family: var(--mono); font-size:11px; }
+.risk-factor{ font-size:10px; color: var(--muted); }
+.risk-bar-bg{ width:70px; height:5px; background: var(--panel-2); border-radius:3px; overflow:hidden; }
+.risk-bar-fg{ height:100%; border-radius:3px; }
+.risk-score{ font-family: var(--mono); font-size:11px; width:26px; text-align:right; }
+.trend-arrow{ font-size:12px; width:14px; text-align:center; }
+.trend-arrow.up{ color: var(--crit); }
+.trend-arrow.down{ color: var(--ok); }
+.trend-arrow.flat{ color: var(--muted); }
+
+/* ---- Posture score ---- */
+.posture-wrap{ display:flex; align-items:center; gap:16px; }
+.posture-ring{ width:96px; height:96px; flex-shrink:0; }
+.posture-breakdown{ flex:1; }
+.pb-row{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:11px; }
+.pb-row:last-child{ margin-bottom:0; }
+.pb-bar-bg{ flex:1; height:5px; background: var(--panel-2); border-radius:3px; margin:0 10px; overflow:hidden; }
+.pb-bar-fg{ height:100%; border-radius:3px; background: var(--data); }
+
+/* ---- Vuln table / patch ---- */
+.sev-pill{ font-family: var(--mono); font-size:9.5px; padding:1.5px 7px; border-radius:4px; font-weight:600; }
+.sev-pill.critical{ background: rgba(240,69,79,0.18); color: var(--crit); }
+.sev-pill.high{ background: rgba(240,166,58,0.18); color: var(--warn); }
+.sev-pill.medium{ background: rgba(79,163,227,0.18); color: var(--data); }
+.patch-row{ display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--line-soft); font-size:11px; }
+.patch-row:last-child{ border-bottom:none; }
+.patch-row .dev{ flex:1; font-family: var(--mono); }
+
+/* ---- Threat feed ---- */
+.threat-item{ display:flex; gap:10px; padding:8px 0; border-bottom:1px solid var(--line-soft); }
+.threat-item:last-child{ border-bottom:none; }
+.threat-time{ font-family: var(--mono); font-size:10px; color: var(--muted); flex-shrink:0; width:44px; }
+.mitre-tag{ font-family: var(--mono); font-size:9px; color: var(--violet); background: rgba(167,139,250,0.13); padding:1px 6px; border-radius:4px; margin-left:6px; }
+
+/* ---- Donut ---- */
+.donut-wrap{ display:flex; align-items:center; gap:16px; }
+.donut-legend{ font-size:11px; }
+.donut-legend .dl-row{ display:flex; align-items:center; gap:7px; margin-bottom:6px; }
+.donut-legend .sw{ width:9px; height:9px; border-radius:2px; }
+
+/* ---- Árvore de impacto (hierarquia até o cliente) ---- */
+.impact-summary{ display:flex; gap:22px; flex-wrap:wrap; margin-bottom:14px; }
+.impact-stat{ background: var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 16px; flex:1; min-width:170px; }
+.impact-stat .v{ font-family: var(--mono); font-size:20px; font-weight:600; }
+.impact-stat .l{ color: var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:0.6px; margin-top:2px; }
+.impact-stat.crit .v{ color: var(--crit); }
+.impact-stat.warn .v{ color: var(--warn); }
+.impact-stat.ok .v{ color: var(--ok); }
+.impact-stat .cause{ font-family: var(--mono); font-size:11px; color: var(--text); margin-top:2px; }
+.tree-scroll{ overflow-x:auto; }
+svg.tree-svg{ display:block; margin:0 auto; min-width:900px; }
+.tree-legend{ display:flex; gap:18px; margin-top:12px; flex-wrap:wrap; font-family: var(--mono); font-size:10.5px; color: var(--muted); }
+.tree-legend .li{ display:flex; align-items:center; gap:6px; }
+.tree-legend .sw{ width:9px; height:9px; border-radius:50%; }
+.tree-legend .ln{ width:16px; height:2px; }
+.tree-controls{ display:flex; gap:8px; margin-bottom:12px; }
+.tree-btn{ font-family: var(--mono); font-size:10.5px; background: var(--panel-2); border:1px solid var(--line);
+  color: var(--muted); padding:6px 12px; border-radius:6px; cursor:pointer; }
+.tree-btn:hover{ color: var(--text); border-color: var(--data); }
+.tree-node-rect.has-kids{ cursor:pointer; }
+.tree-toggle-bg{ fill: var(--panel); stroke: var(--muted-2); stroke-width:1; }
+.tree-toggle-text{ font-family: var(--mono); font-size:10px; fill: var(--text); font-weight:600; }
+.tree-hint{ font-family: var(--mono); font-size:8px; fill: var(--data); }
+
+/* ---- Painel de cadastro ---- */
+.reg-grid{ display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-bottom:14px; }
+.reg-field label{ display:block; font-family: var(--mono); font-size:9.5px; color: var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:5px; }
+.reg-field input, .reg-field select{
+  width:100%; background: var(--panel-2); border:1px solid var(--line); border-radius:6px;
+  color: var(--text); font-family: var(--sans); font-size:12px; padding:7px 9px;
+}
+.reg-field input:focus, .reg-field select:focus{ outline:none; border-color: var(--data); }
+.reg-actions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.reg-actions select{ background: var(--panel-2); border:1px solid var(--line); color: var(--text);
+  font-family: var(--mono); font-size:10.5px; padding:6px 10px; border-radius:6px; }
+@media (max-width: 900px){ .reg-grid{ grid-template-columns: 1fr 1fr; } }
+
+@keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+@keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:0.25;} }
+@keyframes scroll{ from{ transform: translateX(0);} to{ transform: translateX(-100%);} }
+@media (max-width: 1200px){ .layout{ grid-template-columns: 1fr; } .charts-row{ grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="dot"></div>
+      <div>
+        <h1>NOC // PAINEL DE MONITORIA DE REDE</h1>
+        <span>infraestrutura-core &middot; refresh 5s &middot; <span id="clock">--:--:--</span></span>
+      </div>
+    </div>
+    <div class="top-stats">
+      <div class="top-stat ok"><div class="v">99.982%</div><div class="l">SLA uptime 30d</div></div>
+      <div class="top-stat" id="stat-devices-wrap"><div class="v" id="stat-devices">—</div><div class="l">Dispositivos ativos</div></div>
+      <div class="top-stat warn"><div class="v" id="stat-open">—</div><div class="l">Incidentes abertos</div></div>
+      <div class="top-stat crit"><div class="v" id="stat-crit">—</div><div class="l">Críticos</div></div>
+      <div class="top-stat"><div class="v">18min</div><div class="l">MTTR médio (30d)</div></div>
+      <div class="top-stat" id="stat-cap"><div class="v" id="stat-cap-val">—</div><div class="l">Capacidade média</div></div>
+    </div>
+  </div>
+
+  <div class="panel" style="border-color: var(--warn); margin-bottom:14px; padding:10px 14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <span class="badge ok">REAL</span>
+    <span style="font-size:11.5px;">Dispositivos, Latência/Perda média, Incidentes ativos e Status de portas vêm do ARGOS (NetworkAsset + ConnectionMetric + NOCAlert + PortMonitor, coletados via SSH real nos equipamentos).</span>
+    <span class="badge warn" style="margin-left:10px">SIMULADO</span>
+    <span style="font-size:11.5px; color:var(--muted);">Topologia, SLA por enlace, segurança perimetral, top talkers, CMDB, previsão e heatmap ainda são mockup de demonstração — sem coleta SNMP/telemetria contínua implantada.</span>
+  </div>
+
+  <div class="subnav">
+    <a href="#geral">Visão geral</a>
+    <a href="#hierarquia">Árvore até o cliente</a>
+    <a href="#cmdb">Inventário / CMDB</a>
+    <a href="#preditivo">Proatividade &amp; previsão</a>
+    <a href="#seguranca">Segurança avançada</a>
+    <a href="#topologia">Topologia</a>
+    <a href="#incidentes">Incidentes</a>
+  </div>
+
+  <div class="layout" id="geral">
+
+    <!-- ===== Coluna esquerda ===== -->
+    <div class="col">
+      <div class="panel">
+        <h2>Capacidade da infra <span class="tag">média</span></h2>
+        <div class="gauge-row" id="gauge-row"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Dispositivos <span class="tag" id="dev-count-tag"></span></h2>
+        <div id="device-list"></div>
+      </div>
+    </div>
+
+    <!-- ===== Coluna central ===== -->
+    <div class="col">
+      <div class="charts-row">
+        <div class="panel">
+          <div class="chart-head">
+            <div>
+              <h2 style="margin-bottom:2px">Tráfego WAN</h2>
+              <div class="chart-val" id="bw-val">— <small>Mbps</small></div>
+            </div>
+            <div class="chart-delta" id="bw-delta"></div>
+          </div>
+          <svg class="line" id="chart-bw" viewBox="0 0 300 72" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="panel">
+          <div class="chart-head">
+            <div>
+              <h2 style="margin-bottom:2px">Latência média</h2>
+              <div class="chart-val" id="lat-val">— <small>ms</small></div>
+            </div>
+            <div class="chart-delta" id="lat-delta"></div>
+          </div>
+          <svg class="line" id="chart-lat" viewBox="0 0 300 72" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="panel">
+          <div class="chart-head">
+            <div>
+              <h2 style="margin-bottom:2px">Perda de pacotes</h2>
+              <div class="chart-val" id="loss-val">— <small>%</small></div>
+            </div>
+            <div class="chart-delta" id="loss-delta"></div>
+          </div>
+          <svg class="line" id="chart-loss" viewBox="0 0 300 72" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+
+      <div class="panel" id="topologia">
+        <h2>Topologia <span class="tag" style="background:rgba(52,211,153,0.15);color:var(--ok)">REAL — NetworkAsset</span> <span class="tag" style="margin-left:4px">ligações inferidas por papel</span></h2>
+        <svg id="topo" viewBox="0 0 780 300" style="width:100%; height:300px;"></svg>
+      </div>
+
+      <div class="panel">
+        <h2>Status de portas — erros reais <span class="tag" style="background:rgba(52,211,153,0.15);color:var(--ok)">REAL — PortMonitor</span></h2>
+        <div class="portgrid-wrap">
+          <div class="portgrid" id="portgrid"></div>
+          <div class="legend">
+            <div class="li"><div class="sw" style="background:var(--ok)"></div>up / normal</div>
+            <div class="li"><div class="sw" style="background:var(--warn)"></div>erros CRC</div>
+            <div class="li"><div class="sw" style="background:var(--crit)"></div>flapping</div>
+            <div class="li"><div class="sw" style="background:var(--line)"></div>down / não usada</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Top talkers <span class="tag">últimos 5 min</span></h2>
+        <table>
+          <thead><tr><th>Host / IP</th><th>Interface</th><th>Tráfego</th><th style="width:120px">% do link</th></tr></thead>
+          <tbody id="top-talkers"></tbody>
+        </table>
+      </div>
+
+      <div class="panel" id="as-traffic-panel">
+        <h2>Tráfego por operadora / ASN <span class="tag" style="background:rgba(52,211,153,0.15);color:var(--ok)">REAL — FLOW/netflow</span></h2>
+        <div id="as-traffic-list" style="display:flex; flex-direction:column; gap:8px; margin-top:6px;">
+          <div class="dev-meta">Carregando tráfego real do FLOW…</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Incidentes por hora <span class="tag">últimas 24h</span></h2>
+        <div class="heatmap" id="heatmap"></div>
+      </div>
+    </div>
+
+    <!-- ===== Coluna direita ===== -->
+    <div class="col">
+      <div class="panel" id="incidentes">
+        <h2>Incidentes ativos <span class="tag" id="inc-count-tag" style="background:rgba(52,211,153,0.15);color:var(--ok)">REAL — NOCAlert</span></h2>
+        <div id="incident-list"></div>
+      </div>
+
+      <div class="panel">
+        <h2>SLA por enlace</h2>
+        <div id="sla-list"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Segurança perimetral</h2>
+        <div class="sec-stat-row">
+          <div class="sec-stat"><div class="v">1.284</div><div class="l">Drops hoje</div></div>
+          <div class="sec-stat"><div class="v">7</div><div class="l">IDS alertas</div></div>
+          <div class="sec-stat"><div class="v">0</div><div class="l">IPS bloqueios ativos</div></div>
+        </div>
+        <div class="iplist">
+          <div><span>203.0.113.44</span><span>412 tentativas</span></div>
+          <div><span>198.51.100.9</span><span>201 tentativas</span></div>
+          <div><span>192.0.2.187</span><span>96 tentativas</span></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Plantão atual</h2>
+        <div class="oncall">
+          <div class="avatar"></div>
+          <div>
+            <div class="oncall-name">Engenheiro de plantão</div>
+            <div class="oncall-role">Turno 12x36 &middot; até 08:00</div>
+          </div>
+        </div>
+        <div class="escalation">
+          Nível 1: <b>NOC</b> &rarr; Nível 2: <b>Infra Sênior</b> (15min sem resposta) &rarr; Nível 3: <b>Gerência de TI</b> (30min)
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Janela de manutenção</h2>
+        <div class="mw-item">
+          <div class="mw-title">Atualização de firmware — CORE-SW-01</div>
+          <div class="mw-time">Sáb, 08/08 &middot; 02:00–04:00</div>
+        </div>
+        <div class="mw-item">
+          <div class="mw-title">Troca de enlace backup — ISP-LINK-B</div>
+          <div class="mw-time">Ter, 11/08 &middot; 23:00–00:30</div>
+        </div>
+        <div class="mw-item">
+          <div class="mw-title">Renovação de certificado — FW-EDGE-01</div>
+          <div class="mw-time">Qui, 13/08 &middot; 01:00–01:30</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============ ÁRVORE DE IMPACTO — DA BORDA AO CLIENTE ============ -->
+  <div class="section" id="hierarquia">
+    <div class="section-title">
+      <h3>Árvore de impacto — da borda ao cliente</h3>
+      <span class="sub">hierarquia vertical seguindo a topologia real: cada ramo estreita o problema até o grupo de clientes afetado</span>
+    </div>
+
+    <div class="impact-summary" id="impact-summary"></div>
+
+    <div class="panel">
+      <div class="tree-controls">
+        <button class="tree-btn" onclick="toggleRegistryPanel()" id="reg-toggle-btn">Cadastrar minha rede</button>
+        <button class="tree-btn" onclick="setAllCollapse(false)">Expandir tudo</button>
+        <button class="tree-btn" onclick="setAllCollapse(true)">Recolher tudo</button>
+        <button class="tree-btn" onclick="focusIncidentPath()">Ir direto ao problema</button>
+        <button class="tree-btn" onclick="focusBranch('olt1')">📡 Ver OLT → Cliente</button>
+        <span id="save-status" style="font-family:var(--mono); font-size:10px; color:var(--muted); align-self:center; margin-left:4px;"></span>
+      </div>
+
+      <div id="registry-panel" style="display:none; border:1px solid var(--line); border-radius:8px; padding:14px; margin-bottom:16px; background: var(--panel-2);">
+        <h2 style="margin-bottom:12px;">Cadastro de nós da rede</h2>
+        <div class="reg-grid">
+          <div class="reg-field">
+            <label>ID único</label>
+            <input id="reg-id" placeholder="ex: sw-acesso-05">
+          </div>
+          <div class="reg-field">
+            <label>Nome de exibição</label>
+            <input id="reg-label" placeholder="ex: Switch Bloco B">
+          </div>
+          <div class="reg-field">
+            <label>Nó pai (onde conecta)</label>
+            <select id="reg-parent"></select>
+          </div>
+          <div class="reg-field">
+            <label>Camada</label>
+            <select id="reg-layer">
+              <option value="borda">borda</option>
+              <option value="core">core</option>
+              <option value="olt">OLT</option>
+              <option value="vlan">VLAN</option>
+              <option value="distribuição">distribuição</option>
+              <option value="caixa">caixa / CTO</option>
+              <option value="acesso">acesso</option>
+              <option value="serviço">serviço</option>
+              <option value="cliente">cliente</option>
+            </select>
+          </div>
+          <div class="reg-field">
+            <label>Status</label>
+            <select id="reg-status">
+              <option value="ok">ok</option>
+              <option value="warn">atenção</option>
+              <option value="crit">crítico</option>
+            </select>
+          </div>
+          <div class="reg-field">
+            <label>Descrição / métrica</label>
+            <input id="reg-meta" placeholder="ex: CPU 45%, 24 portas">
+          </div>
+          <div class="reg-field">
+            <label>Clientes (se for nó folha)</label>
+            <input id="reg-clients" type="number" min="0" value="0">
+          </div>
+          <div class="reg-field">
+            <label>Impactados agora</label>
+            <input id="reg-impacted" type="number" min="0" value="0">
+          </div>
+          <div class="reg-field">
+            <label>Fabricante</label>
+            <input id="reg-vendor" placeholder="ex: Mikrotik">
+          </div>
+          <div class="reg-field">
+            <label>Modelo</label>
+            <input id="reg-model" placeholder="ex: CCR2004-16G-2S+">
+          </div>
+          <div class="reg-field">
+            <label>Número de série</label>
+            <input id="reg-serial" placeholder="ex: HD3224F...">
+          </div>
+          <div class="reg-field">
+            <label>Versão de firmware</label>
+            <input id="reg-firmware" placeholder="ex: RouterOS 7.15">
+          </div>
+          <div class="reg-field">
+            <label>Garantia até</label>
+            <input id="reg-warranty" type="date">
+          </div>
+          <div class="reg-field">
+            <label>Fim de suporte (EOL)</label>
+            <input id="reg-eol" type="date">
+          </div>
+          <div class="reg-field">
+            <label>Responsável</label>
+            <input id="reg-owner" placeholder="ex: João — Infra">
+          </div>
+          <div class="reg-field">
+            <label>Endereço / referência</label>
+            <input id="reg-address" placeholder="ex: Rua das Flores, nº 245 · poste 45">
+          </div>
+          <div class="reg-field">
+            <label>VLAN ID / porta PON</label>
+            <input id="reg-vlanid" placeholder="ex: VLAN 100 ou PON 1/0/3">
+          </div>
+          <div class="reg-field">
+            <label>Sinal óptico (dBm)</label>
+            <input id="reg-signal" placeholder="ex: -19.4 ou 'sem sinal'">
+          </div>
+        </div>
+        <div class="reg-actions">
+          <button class="tree-btn" onclick="addOrUpdateNode()">Adicionar / atualizar nó</button>
+          <select id="reg-select-existing"></select>
+          <button class="tree-btn" onclick="prepEditSelected()">Carregar p/ editar</button>
+          <button class="tree-btn" onclick="removeSelectedNode()">Remover nó</button>
+          <button class="tree-btn" onclick="focusBranch(document.getElementById('reg-select-existing').value)">🔍 Focar neste ramo</button>
+        </div>
+        <div class="reg-actions" style="margin-top:10px;">
+          <button class="tree-btn" onclick="exportTreeJSON()">⬇ Exportar JSON</button>
+          <label class="tree-btn" style="margin:0;">⬆ Importar JSON
+            <input type="file" id="reg-import-file" accept="application/json" style="display:none" onchange="importTreeJSON(event)">
+          </label>
+          <button class="tree-btn" onclick="resetTreeEmpty()">Começar do zero</button>
+          <button class="tree-btn" onclick="loadExampleTree()">Carregar exemplo</button>
+          <button class="tree-btn" onclick="clearSavedData()">🗑 Limpar dados salvos</button>
+        </div>
+        <div id="reg-feedback" style="margin-top:10px; font-family:var(--mono); font-size:10.5px; color:var(--muted);"></div>
+      </div>
+
+      <div class="tree-scroll">
+        <svg class="tree-svg" id="impact-tree-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <div class="tree-legend">
+        <div class="li"><div class="sw" style="background:var(--ok)"></div>saudável</div>
+        <div class="li"><div class="sw" style="background:var(--warn)"></div>atenção</div>
+        <div class="li"><div class="sw" style="background:var(--crit)"></div>crítico / causa raiz</div>
+        <div class="li"><div class="ln" style="background:var(--crit)"></div>caminho do incidente até o cliente</div>
+        <div class="li"><div class="ln" style="background:var(--line)"></div>ramo saudável (não impactado)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ INVENTÁRIO / CMDB ============ -->
+  <div class="section" id="cmdb">
+    <div class="section-title">
+      <h3>Inventário / CMDB</h3>
+      <span class="sub">fabricante, garantia, firmware e fim de vida útil — dados que vêm do cadastro de cada nó</span>
+    </div>
+
+    <div class="impact-summary" id="cmdb-summary"></div>
+
+    <div class="panel">
+      <h2>Equipamentos cadastrados <span class="tag" id="cmdb-count-tag"></span></h2>
+      <table>
+        <thead>
+          <tr><th>Equipamento</th><th>Fabricante / modelo</th><th>Serial</th><th>Firmware</th><th>Garantia até</th><th>Fim de suporte (EOL)</th><th>Responsável</th></tr>
+        </thead>
+        <tbody id="cmdb-table"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ PROATIVIDADE & PREVISÃO ============ -->
+  <div class="section" id="preditivo">
+    <div class="section-title">
+      <h3>Proatividade &amp; previsão</h3>
+      <span class="sub">projeção baseada na tendência dos últimos 7 dias — antecipa problemas antes de virarem incidente</span>
+    </div>
+    <div class="section-grid3">
+
+      <div class="panel">
+        <h2>Previsão de saturação <span class="tag">3 métricas</span></h2>
+        <div id="forecast-list"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Anomalias detectadas <span class="tag" id="anomaly-count-tag"></span></h2>
+        <div id="anomaly-list"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Recomendações proativas</h2>
+        <div id="reco-list"></div>
+      </div>
+
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <h2>Ranking de risco por dispositivo <span class="tag">quem observar primeiro</span></h2>
+      <div id="risk-list"></div>
+    </div>
+  </div>
+
+  <!-- ============ SEGURANÇA AVANÇADA ============ -->
+  <div class="section" id="seguranca">
+    <div class="section-title">
+      <h3>Segurança avançada</h3>
+      <span class="sub">postura, vulnerabilidades e eventos de ameaça em tempo real</span>
+    </div>
+    <div class="section-grid4">
+
+      <div class="panel">
+        <h2>Postura de segurança</h2>
+        <div class="posture-wrap">
+          <div id="posture-ring"></div>
+          <div class="posture-breakdown" id="posture-breakdown"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Compliance de patches</h2>
+        <div style="font-family:var(--mono); font-size:22px; font-weight:600; margin-bottom:8px;" id="patch-pct">—</div>
+        <div id="patch-list"></div>
+      </div>
+
+      <div class="panel" style="grid-column: span 2;">
+        <h2>Vulnerabilidades abertas <span class="tag" id="vuln-count-tag"></span></h2>
+        <table>
+          <thead><tr><th>ID</th><th>Dispositivo</th><th>Severidade</th><th>Idade</th></tr></thead>
+          <tbody id="vuln-table"></tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <div class="section-grid3" style="margin-top:14px">
+      <div class="panel" style="grid-column: span 2;">
+        <h2>Feed de ameaças <span class="tag">tempo real</span></h2>
+        <div id="threat-feed"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Tráfego na borda</h2>
+        <div class="donut-wrap">
+          <svg id="donut" viewBox="0 0 120 120" width="110" height="110"></svg>
+          <div class="donut-legend" id="donut-legend"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker">
+    <div class="ticker-track" id="ticker-track"></div>
+  </div>
+
+</div>
+
+<script>
+/* ---------- relógio ---------- */
+function tickClock(){ document.getElementById('clock').textContent = new Date().toLocaleTimeString('pt-BR'); }
+setInterval(tickClock, 1000); tickClock();
+
+/* ---------- dispositivos ---------- */
+const capacityDevices = [
+  {name:'CORE-RTR-01', type:'Roteador core', ip:'10.0.0.1', status:'ok', cpu:12, mem:38, temp:41},
+  {name:'FW-EDGE-01', type:'Firewall borda', ip:'10.0.0.2', status:'ok', cpu:34, mem:52, temp:44},
+  {name:'CORE-SW-01', type:'Switch L3 core', ip:'10.0.1.1', status:'ok', cpu:18, mem:29, temp:39},
+  {name:'DIST-SW-02', type:'Switch distribuição', ip:'10.0.2.5', status:'warn', cpu:71, mem:66, temp:52},
+  {name:'ACC-SW-14', type:'Switch acesso', ip:'10.0.3.14', status:'ok', cpu:9, mem:21, temp:35},
+  {name:'WLC-01', type:'Controladora WiFi', ip:'10.0.4.1', status:'ok', cpu:22, mem:44, temp:38},
+  {name:'ISP-LINK-A', type:'Enlace primário', ip:'—', status:'ok', cpu:null, mem:null, temp:null},
+  {name:'ISP-LINK-B', type:'Enlace backup', ip:'—', status:'crit', cpu:null, mem:null, temp:null},
+  {name:'DNS-01', type:'Servidor DNS', ip:'10.0.5.1', status:'ok', cpu:6, mem:33, temp:36},
+  {name:'DHCP-01', type:'Servidor DHCP', ip:'10.0.5.2', status:'warn', cpu:58, mem:61, temp:43},
+];
+/* Gauges de capacidade (CPU/MEM/link) ainda são SIMULADOS — sem coleta SNMP real implantada */
+const withCpu = capacityDevices.filter(d=>d.cpu!==null);
+const avgCpu = Math.round(withCpu.reduce((s,d)=>s+d.cpu,0)/withCpu.length);
+document.getElementById('stat-cap-val').textContent = avgCpu+'%';
+
+/* ---------- DISPOSITIVOS REAIS (ARGOS / NetworkAsset) ---------- */
+const DATA_SOURCE_CLASS = { Real:'ok', Confirmado:'ok', Manual:'warn', Importado:'info', Inferido:'warn', Simulado:'crit', Desatualizado:'crit' };
+async function loadRealArgosData(){
+  const listEl = document.getElementById('device-list');
+  try{
+    const res = await fetch('https://valen-a789b7cc.base44.app/functions/getArgosDashboardData', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+    const data = await res.json();
+    if(!data.success) throw new Error(data.error || 'falha ao buscar dados reais');
+
+    document.getElementById('dev-count-tag').textContent = data.device_count + ' cadastrados (ARGOS real)';
+    listEl.innerHTML = '';
+    data.devices.forEach(d=>{
+      const row = document.createElement('div');
+      row.className = 'device';
+      const srcClass = DATA_SOURCE_CLASS[d.data_source] || 'warn';
+      row.innerHTML = `
+        <div class="status-dot ${d.status}"></div>
+        <div class="dev-info">
+          <div class="dev-name">${d.name} <span class="badge ${srcClass}" style="margin-left:4px">${d.data_source}</span></div>
+          <div class="dev-meta">${d.type} &middot; ${d.ip}${d.pop ? ' &middot; '+d.pop : ''}</div>
+        </div>
+      `;
+      listEl.appendChild(row);
+    });
+
+    const upCount = data.devices.filter(d=>d.status==='ok').length;
+    const warnCount = data.devices.filter(d=>d.status==='warn').length;
+    const critCount = data.devices.filter(d=>d.status==='crit').length;
+    document.getElementById('stat-devices').textContent = upCount+'/'+data.device_count;
+    document.getElementById('stat-open').textContent = warnCount+critCount;
+    document.getElementById('stat-crit').textContent = critCount;
+
+    if(data.latency_series && data.latency_series.length>1){
+      latData = data.latency_series;
+      drawLine('chart-lat', latData, 'var(--data)');
+      document.getElementById('lat-val').innerHTML = (data.latest_avg_latency_ms ?? '—') + ' <small>ms (real)</small>';
+      const ld = delta(latData);
+      const ldEl = document.getElementById('lat-delta');
+      ldEl.textContent = (ld>=0?'▲ ':'▼ ')+Math.abs(ld).toFixed(1)+'ms';
+      ldEl.className = 'chart-delta ' + (ld>=0?'up':'down');
+    }
+    if(data.loss_series && data.loss_series.length>1){
+      lossData = data.loss_series;
+      drawLine('chart-loss', lossData, 'var(--warn)');
+      document.getElementById('loss-val').innerHTML = (data.latest_avg_loss_pct ?? '—') + ' <small>% (real)</small>';
+      const pd = delta(lossData);
+      const pdEl = document.getElementById('loss-delta');
+      pdEl.textContent = (pd>=0?'▲ ':'▼ ')+Math.abs(pd).toFixed(2)+'%';
+      pdEl.className = 'chart-delta ' + (pd>=0?'up':'down');
+    }
+    document.querySelectorAll('.chart-head h2')[1].innerHTML = 'Latência média <span class="tag" style="background:rgba(52,211,153,0.15);color:var(--ok)">REAL</span>';
+    document.querySelectorAll('.chart-head h2')[2].innerHTML = 'Perda de pacotes <span class="tag" style="background:rgba(52,211,153,0.15);color:var(--ok)">REAL</span>';
+    document.querySelectorAll('.chart-head h2')[0].innerHTML = 'Tráfego WAN <span class="tag">SIMULADO</span>';
+
+    if(typeof renderRealPorts === 'function') renderRealPorts(data.ports);
+    if(typeof renderRealIncidents === 'function') renderRealIncidents(data.alerts);
+    if(typeof renderRealTopology === 'function') renderRealTopology(data.devices);
+  }catch(err){
+    listEl.innerHTML = `<div class="dev-meta">Falha ao carregar dados reais: ${err.message}</div>`;
+  }
+}
+
+/* ---------- TRÁFEGO REAL POR ASN/OPERADORA (FLOW / netflow) ---------- */
+async function loadRealASTraffic(){
+  const el = document.getElementById('as-traffic-list');
+  try{
+    const res = await fetch('https://valen-a789b7cc.base44.app/functions/getArgosTrafficByAS', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+    const data = await res.json();
+    if(!data.success) throw new Error(data.error || 'falha ao buscar tráfego por ASN');
+
+    const list = data.top_as || [];
+    const max = Math.max(...list.map(a=>a.mbps), 1);
+    el.innerHTML = list.map(a => `
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="width:170px; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="AS${a.asn} ${a.name}">${a.name}</div>
+        <div style="flex:1; background:var(--panel-2); border-radius:4px; height:14px; position:relative; overflow:hidden;">
+          <div style="width:${Math.max((a.mbps/max)*100, 2)}%; height:100%; background:var(--data);"></div>
+        </div>
+        <div style="width:90px; text-align:right; font-family:var(--mono); font-size:12px;">${a.mbps.toLocaleString('pt-BR')} Mbps</div>
+      </div>
+    `).join('');
+
+    const failedSources = (data.sources||[]).filter(s=>!s.ok);
+    if(failedSources.length){
+      el.innerHTML += `<div class="dev-meta" style="margin-top:4px">⚠ ${failedSources.length} fonte(s) não responderam: ${failedSources.map(s=>s.source).join(', ')}</div>`;
+    }
+  }catch(err){
+    el.innerHTML = `<div class="dev-meta">Falha ao carregar tráfego real por ASN: ${err.message}</div>`;
+  }
+}
+loadRealASTraffic();
+setInterval(loadRealASTraffic, 30000);
+
+loadRealArgosData();
+setInterval(loadRealArgosData, 30000);
+
+/* ---------- gauges de capacidade ---------- */
+function ring(id, pct, color){
+  const r=22, c=2*Math.PI*r;
+  return `
+  <svg class="ring" viewBox="0 0 56 56">
+    <circle cx="28" cy="28" r="${r}" fill="none" stroke="var(--panel-2)" stroke-width="5"/>
+    <circle cx="28" cy="28" r="${r}" fill="none" stroke="${color}" stroke-width="5"
+      stroke-dasharray="${c}" stroke-dashoffset="${c*(1-pct/100)}"
+      stroke-linecap="round" transform="rotate(-90 28 28)"/>
+    <text x="28" y="32" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--text)">${pct}%</text>
+  </svg>`;
+}
+const gaugeData = [
+  {label:'CPU média', pct: avgCpu, color: avgCpu>60?'var(--warn)':'var(--ok)'},
+  {label:'Memória média', pct: Math.round(capacityDevices.filter(d=>d.mem).reduce((s,d)=>s+d.mem,0)/capacityDevices.filter(d=>d.mem).length), color:'var(--data)'},
+  {label:'Link WAN', pct: 64, color:'var(--violet)'},
+];
+document.getElementById('gauge-row').innerHTML = gaugeData.map(g=>`
+  <div class="gauge">${ring(g.label, g.pct, g.color)}<div class="label">${g.label}</div></div>
+`).join('');
+
+/* ---------- gráficos de linha ---------- */
+function makeSeries(n, base, spread, min=0){
+  const arr=[]; let v=base;
+  for(let i=0;i<n;i++){ v += (Math.random()-0.5)*spread; v = Math.max(min, v); arr.push(v); }
+  return arr;
+}
+function drawLine(svgId, data, color){
+  const svg = document.getElementById(svgId);
+  const w=300, h=72, pad=6;
+  const max = Math.max(...data)*1.15 || 1;
+  const step = (w-2*pad)/(data.length-1);
+  const pts = data.map((v,i)=>{
+    const x = pad + i*step;
+    const y = h - pad - (v/max)*(h-2*pad);
+    return [x,y];
+  });
+  const path = pts.map((p,i)=> (i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  const areaPath = path + ` L${pts[pts.length-1][0].toFixed(1)},${h-pad} L${pts[0][0].toFixed(1)},${h-pad} Z`;
+  svg.innerHTML = `
+    <defs><linearGradient id="grad-${svgId}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${color}" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d="${areaPath}" fill="url(#grad-${svgId})" stroke="none"/>
+    <path d="${path}" fill="none" stroke="${color}" stroke-width="1.6"/>
+    <circle cx="${pts[pts.length-1][0]}" cy="${pts[pts.length-1][1]}" r="3" fill="${color}"/>
+  `;
+}
+let bwData = makeSeries(40, 380, 60);
+let latData = makeSeries(40, 14, 4, 1);
+let lossData = makeSeries(40, 0.3, 0.4, 0);
+function delta(arr){
+  const d = arr[arr.length-1]-arr[arr.length-2];
+  return d;
+}
+function refreshCharts(){
+  bwData = bwData.slice(1).concat([Math.max(50, bwData[bwData.length-1]+(Math.random()-0.5)*70)]);
+  latData = latData.slice(1).concat([Math.max(2, latData[latData.length-1]+(Math.random()-0.5)*4)]);
+  lossData = lossData.slice(1).concat([Math.max(0, Math.min(5, lossData[lossData.length-1]+(Math.random()-0.5)*0.5))]);
+  drawLine('chart-bw', bwData, '#4FA3E3');
+  drawLine('chart-lat', latData, '#34D399');
+  drawLine('chart-loss', lossData, '#F0A63A');
+  document.getElementById('bw-val').innerHTML = bwData[bwData.length-1].toFixed(0)+' <small>Mbps</small>';
+  document.getElementById('lat-val').innerHTML = latData[latData.length-1].toFixed(1)+' <small>ms</small>';
+  document.getElementById('loss-val').innerHTML = lossData[lossData.length-1].toFixed(2)+' <small>%</small>';
+  const bd = delta(bwData), ld = delta(latData), pd = delta(lossData);
+  document.getElementById('bw-delta').innerHTML = (bd>=0?'▲ ':'▼ ')+Math.abs(bd).toFixed(0);
+  document.getElementById('bw-delta').className = 'chart-delta ' + (bd>=0?'up':'down');
+  document.getElementById('lat-delta').innerHTML = (ld>=0?'▲ ':'▼ ')+Math.abs(ld).toFixed(1);
+  document.getElementById('lat-delta').className = 'chart-delta ' + (ld>=0?'up':'down');
+  document.getElementById('loss-delta').innerHTML = (pd>=0?'▲ ':'▼ ')+Math.abs(pd).toFixed(2);
+  document.getElementById('loss-delta').className = 'chart-delta ' + (pd>=0?'up':'down');
+}
+refreshCharts();
+setInterval(refreshCharts, 4000);
+
+/* ---------- topologia (REAL — nodes do NetworkAsset, ligações inferidas por papel) ---------- */
+let currentTopoNodes = [];
+let currentTopoLinks = [];
+const topoSvg = document.getElementById('topo');
+const topoStatusColor = {ok:'#34D399', warn:'#F0A63A', crit:'#F0454F'};
+
+function renderRealTopology(devices){
+  if(!devices || !devices.length){ topoSvg.innerHTML = '<text x="390" y="150" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="11">Sem ativos cadastrados</text>'; return; }
+
+  const ROLE_GROUPS = [
+    {roles:['peering']},
+    {roles:['core']},
+    {roles:['cgnat','gateway']},
+    {roles:['access','jump-host']},
+  ];
+  const used = new Set();
+  const cols = ROLE_GROUPS.map(g => devices.filter(d => { const r=(d.type||'').toLowerCase(); if(g.roles.includes(r)){ used.add(d); return true;} return false; }));
+  const leftover = devices.filter(d => !used.has(d));
+  if(leftover.length) cols.push(leftover);
+  const nonEmpty = cols.filter(c => c.length);
+
+  const width = 780, height = 300, marginX = 90;
+  const usableWidth = width - marginX*2;
+  const colX = nonEmpty.map((_, i) => nonEmpty.length===1 ? width/2 : marginX + (usableWidth * i/(nonEmpty.length-1)));
+
+  const nodes = [];
+  nonEmpty.forEach((colDevices, ci) => {
+    const n = colDevices.length;
+    colDevices.forEach((d, ri) => {
+      const y = n===1 ? height/2 : 36 + (height-72) * ri/(Math.max(n-1,1));
+      const shortLabel = d.name.length>15 ? d.name.slice(0,14)+'…' : d.name;
+      nodes.push({ id: ci+'-'+ri, col: ci, label: shortLabel, sub: (d.type||'')+(d.pop?' · '+d.pop:''), x: colX[ci], y, status: d.status });
+    });
+  });
+
+  let html='';
+  const links = [];
+  for(let ci=0; ci<nonEmpty.length-1; ci++){
+    const a = nodes.filter(n=>n.col===ci), b = nodes.filter(n=>n.col===ci+1);
+    a.forEach(na => b.forEach(nb => {
+      const worse = (na.status==='crit'||nb.status==='crit') ? 'crit' : (na.status==='warn'||nb.status==='warn') ? 'warn' : 'ok';
+      links.push([na, nb, worse]);
+      const midx=(na.x+nb.x)/2;
+      html += `<path class="link ${worse!=='ok'?worse:''}" d="M${na.x+40},${na.y} C${midx},${na.y} ${midx},${nb.y} ${nb.x-40},${nb.y}"/>`;
+    }));
+  }
+  nodes.forEach(n=>{
+    html += `
+      <g>
+        <rect class="node" x="${n.x-40}" y="${n.y-16}" width="80" height="32" rx="7" stroke="${topoStatusColor[n.status]}"/>
+        <circle cx="${n.x-33}" cy="${n.y-9}" r="3" fill="${topoStatusColor[n.status]}">
+          ${n.status==='crit' ? '<animate attributeName="opacity" values="1;0.2;1" dur="1s" repeatCount="indefinite"/>' : ''}
+        </circle>
+        <text class="node-label" x="${n.x}" y="${n.y-1}" text-anchor="middle" style="font-size:9px">${n.label}</text>
+        <text class="node-sub" x="${n.x}" y="${n.y+11}" text-anchor="middle" style="font-size:7px">${n.sub}</text>
+      </g>`;
+  });
+  topoSvg.innerHTML = html;
+  currentTopoNodes = nodes;
+  currentTopoLinks = links.map(([na,nb,st]) => [na.id, nb.id, st]);
+}
+
+function animateTraffic(){
+  if(!currentTopoNodes.length) return;
+  currentTopoLinks.forEach(([aId,bId,st])=>{
+    if(st==='crit') return;
+    const na = currentTopoNodes.find(n=>n.id===aId), nb = currentTopoNodes.find(n=>n.id===bId);
+    if(!na || !nb) return;
+    const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    dot.setAttribute('r','2.5'); dot.setAttribute('fill', st==='warn' ? '#F0A63A' : '#4FA3E3');
+    dot.setAttribute('cx', na.x+40); dot.setAttribute('cy', na.y);
+    topoSvg.appendChild(dot);
+    const dur = 1400 + Math.random()*600, start = performance.now();
+    function step(t){
+      const p = Math.min(1, (t-start)/dur);
+      dot.setAttribute('cx', na.x+40 + (nb.x-40-(na.x+40))*p);
+      dot.setAttribute('cy', na.y + (nb.y-na.y)*p);
+      if(p<1) requestAnimationFrame(step); else dot.remove();
+    }
+    requestAnimationFrame(step);
+  });
+}
+setInterval(animateTraffic, 900); animateTraffic();
+
+/* ---------- grid de portas (REAL — preenchido via loadRealArgosData) ---------- */
+function renderRealPorts(ports){
+  const portGrid = document.getElementById('portgrid');
+  const legendWrap = portGrid.parentElement.querySelector('.legend');
+  if(!ports || !ports.length){
+    portGrid.innerHTML = '<div class="dev-meta">Sem dados de porta ainda.</div>';
+    return;
+  }
+  portGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+  portGrid.innerHTML = ports.map(p=>{
+    let cls='ok';
+    if(p.link_status==='down') cls='down';
+    else if((p.input_errors||0) > 100000) cls='crit';
+    else if((p.input_errors||0) > 0) cls='err';
+    const errTxt = (p.input_errors||0).toLocaleString('pt-BR');
+    return `
+    <div class="port ${cls}" style="aspect-ratio:auto; height:auto; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; padding:6px 8px; color:rgba(0,0,0,0.75);">
+      <div style="font-family:var(--mono); font-size:9.5px; font-weight:700;">${p.asset_name}</div>
+      <div style="font-family:var(--mono); font-size:9px;">${p.port_name}</div>
+      <div style="font-family:var(--mono); font-size:9px;">in-errors: ${errTxt}${p.link_status==='down' ? ' (down)' : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- top talkers ---------- */
+const talkers = [
+  {host:'srv-backup-01', ip:'10.0.6.12', iface:'Gi1/0/3', mbps:142, pct:37},
+  {host:'srv-video-conf', ip:'10.0.6.30', iface:'Gi1/0/7', mbps:98, pct:26},
+  {host:'nvr-cftv-01', ip:'10.0.7.5', iface:'Gi1/0/11', mbps:64, pct:17},
+  {host:'ws-financeiro-22', ip:'10.0.8.44', iface:'Gi1/0/22', mbps:31, pct:8},
+  {host:'ap-wifi-piso3', ip:'10.0.4.19', iface:'Gi1/0/15', mbps:24, pct:6},
+];
+document.getElementById('top-talkers').innerHTML = talkers.map(t=>`
+  <tr>
+    <td>${t.host}<br><span style="color:var(--muted)">${t.ip}</span></td>
+    <td>${t.iface}</td>
+    <td>${t.mbps} Mbps</td>
+    <td><div class="bar-bg"><div class="bar-fg" style="width:${t.pct*2}%"></div></div></td>
+  </tr>
+`).join('');
+
+/* ---------- incidentes ativos (REAL — preenchido via loadRealArgosData) ---------- */
+const SEV_MAP = { critical:'crit', warning:'warn', info:'info', ok:'ok' };
+function renderRealIncidents(alerts){
+  const el = document.getElementById('incident-list');
+  if(!alerts || !alerts.length){
+    document.getElementById('inc-count-tag').textContent = '0 abertos';
+    el.innerHTML = '<div class="dev-meta">Nenhum incidente ativo registrado.</div>';
+    return;
+  }
+  const open = alerts.filter(a=>!a.acknowledged);
+  document.getElementById('inc-count-tag').textContent = open.length + ' abertos';
+  el.innerHTML = alerts.map(a=>{
+    const sev = SEV_MAP[a.severity] || 'info';
+    const when = a.timestamp ? new Date(a.timestamp).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—';
+    return `
+    <div class="incident">
+      <div class="incident-top"><span class="incident-id">${a.alert_type || 'alerta'}</span><span class="badge ${sev}">${sev}</span></div>
+      <div class="incident-msg"><b>${a.asset_name || ''}</b>${a.port_name ? ' ('+a.port_name+')' : ''}: ${a.message}</div>
+      <div class="incident-meta"><span>${a.acknowledged ? 'reconhecido' : 'aberto'}</span><span>${when}</span></div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- SLA por enlace ---------- */
+const slas = [
+  {name:'ISP-LINK-A (primário)', target:'99.9%', val:99.97, status:'ok'},
+  {name:'ISP-LINK-B (backup)', target:'99.5%', val:97.20, status:'crit'},
+  {name:'Core ↔ Distribuição', target:'99.99%', val:99.99, status:'ok'},
+  {name:'Core ↔ WiFi', target:'99.9%', val:99.94, status:'ok'},
+];
+document.getElementById('sla-list').innerHTML = slas.map(s=>`
+  <div class="sla-row">
+    <div class="sla-name">${s.name}<div class="sla-target">meta ${s.target}</div></div>
+    <div class="sla-val" style="color:${s.status==='ok'?'var(--ok)':'var(--crit)'}">${s.val.toFixed(2)}%</div>
+  </div>
+`).join('');
+
+/* ---------- heatmap 24h ---------- */
+const hm = document.getElementById('heatmap');
+let hmHtml='';
+for(let h=0; h<24; h++){
+  const level = Math.random();
+  let color = 'var(--panel-2)';
+  if(level>0.92) color='var(--crit)';
+  else if(level>0.75) color='var(--warn)';
+  else if(level>0.55) color='rgba(79,163,227,0.5)';
+  hmHtml += `<div class="hm-cell" style="background:${color}" title="${h}h"></div>`;
+}
+hm.innerHTML = hmHtml;
+
+/* ---------- ticker ---------- */
+const tickerMsgs = [
+  '<b>CORE-RTR-01</b> BGP peer 200.1.1.1 estável — 14 dias',
+  '<b>FW-EDGE-01</b> 0 tentativas de intrusão críticas nas últimas 24h',
+  '<b>DIST-SW-02</b> CPU 71% — monitorando tendência de crescimento',
+  '<b>ISP-LINK-B</b> sem sinal há 00:04:12 — incidente #4471 aberto',
+  '<b>WLC-01</b> 212 clientes conectados, 6 APs saudáveis',
+  '<b>DNS-01</b> latência de resolução 2ms — 100% de disponibilidade',
+  '<b>DHCP-01</b> pool em 85% — considerar ampliar escopo',
+];
+document.getElementById('ticker-track').innerHTML = tickerMsgs.map(m=>`<span>${m}</span>`).join('');
+
+/* ================= PROATIVIDADE & PREVISÃO ================= */
+
+/* ---- previsão de saturação (histórico + projeção linear até o limite) ---- */
+function buildForecastSeries(current, dailySlope, days=7){
+  const hist = [];
+  let v = current - dailySlope*days;
+  for(let i=0;i<=days;i++){ hist.push(Math.max(0, v + (Math.random()-0.5)*2)); v += dailySlope; }
+  hist[hist.length-1] = current;
+  return hist;
+}
+function drawForecast(svgId, hist, slope, threshold, color){
+  const svg = document.getElementById(svgId);
+  const w=300, h=64, pad=6;
+  const projDays = 6;
+  const proj = [hist[hist.length-1]];
+  for(let i=1;i<=projDays;i++) proj.push(proj[0]+slope*i);
+  const all = hist.concat(proj.slice(1));
+  const max = Math.max(threshold*1.1, ...all);
+  const totalPts = hist.length + projDays;
+  const step = (w-2*pad)/totalPts;
+  const histPts = hist.map((v,i)=>[pad+i*step, h-pad-(v/max)*(h-2*pad)]);
+  const projPts = proj.map((v,i)=>[pad+(hist.length-1+i)*step, h-pad-(v/max)*(h-2*pad)]);
+  const thY = h-pad-(threshold/max)*(h-2*pad);
+  const histPath = histPts.map((p,i)=>(i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  const projPath = projPts.map((p,i)=>(i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  svg.innerHTML = `
+    <line class="threshold-line" x1="${pad}" y1="${thY}" x2="${w-pad}" y2="${thY}"/>
+    <path class="hist" d="${histPath}" stroke="${color}"/>
+    <path class="proj" d="${projPath}" stroke="${color}"/>
+    <circle cx="${histPts[histPts.length-1][0]}" cy="${histPts[histPts.length-1][1]}" r="2.8" fill="${color}"/>
+  `;
+}
+const forecastMetrics = [
+  {name:'CPU — DIST-SW-02', current:71, slope:1.8, threshold:90, unit:'%', color:'#F0A63A'},
+  {name:'Utilização — Link WAN', current:64, slope:2.6, threshold:90, unit:'%', color:'#4FA3E3'},
+  {name:'Pool de IPs — DHCP-01', current:85, slope:2.1, threshold:95, unit:'%', color:'#A78BFA'},
+];
+const forecastListEl = document.getElementById('forecast-list');
+forecastListEl.innerHTML = forecastMetrics.map(m=>{
+  const daysToThreshold = m.slope>0 ? (m.threshold - m.current)/m.slope : Infinity;
+  let etaClass='ok', etaText='estável';
+  if(daysToThreshold <= 2){ etaClass='crit'; etaText=`limite em ~${Math.max(1,Math.round(daysToThreshold*24))}h`; }
+  else if(daysToThreshold <= 6){ etaClass='warn'; etaText=`limite em ~${Math.round(daysToThreshold)}d`; }
+  else{ etaClass='ok'; etaText=`limite em ~${Math.round(daysToThreshold)}d`; }
+  return `
+    <div class="forecast-item">
+      <div class="forecast-head">
+        <span class="name">${m.name}</span>
+        <span class="eta ${etaClass}">${etaText}</span>
+      </div>
+      <svg class="forecast" id="fc-${m.name.replace(/[^a-zA-Z0-9]/g,'')}" viewBox="0 0 300 64" preserveAspectRatio="none"></svg>
+    </div>
+  `;
+}).join('');
+forecastMetrics.forEach(m=>{
+  const hist = buildForecastSeries(m.current, m.slope);
+  drawForecast('fc-'+m.name.replace(/[^a-zA-Z0-9]/g,''), hist, m.slope, m.threshold, m.color);
+});
+
+/* ---- anomalias ---- */
+const anomalies = [
+  {dev:'DIST-SW-02', desc:'CPU 34% acima da linha de base para este horário (padrão histórico: ~40%)', sev:'warn', score:'z=2.4'},
+  {dev:'ISP-LINK-B', desc:'Perda total de sinal — desvio de 100% em relação à disponibilidade esperada', sev:'crit', score:'z=8.1'},
+  {dev:'DHCP-01', desc:'Taxa de concessão de leases 3x maior que a média das últimas 4 semanas', sev:'warn', score:'z=3.0'},
+  {dev:'WLC-01', desc:'Pico de reautenticações no SSID corp-guest fora do padrão de uso', sev:'info', score:'z=1.6'},
+];
+document.getElementById('anomaly-count-tag').textContent = anomalies.length + ' hoje';
+document.getElementById('anomaly-list').innerHTML = anomalies.map(a=>`
+  <div class="anomaly">
+    <div class="anomaly-top"><span class="anomaly-dev">${a.dev}</span><span class="badge ${a.sev}">${a.sev}</span></div>
+    <div class="anomaly-desc">${a.desc}</div>
+    <div class="anomaly-score" style="color:var(--muted); margin-top:2px;">desvio estatístico ${a.score}</div>
+  </div>
+`).join('');
+
+/* ---- recomendações proativas ---- */
+const recos = [
+  {p:'alta', text:'Ampliar o escopo do pool DHCP-01 antes de esgotar — projeção indica saturação em ~48h.', deadline:'até amanhã'},
+  {p:'alta', text:'Ativar failover manual do ISP-LINK-B ou acionar fornecedor — sem previsão de religamento automático.', deadline:'imediato'},
+  {p:'media', text:'Investigar causa do crescimento de CPU em DIST-SW-02 (processo, broadcast storm ou STP recalculando).', deadline:'nas próximas 24h'},
+  {p:'media', text:'Planejar upgrade de capacidade do link WAN — tendência de uso sobe ~2,6%/dia.', deadline:'próxima janela de manutenção'},
+  {p:'baixa', text:'Revisar política de reautenticação do SSID corp-guest para reduzir ruído de sinal.', deadline:'sem urgência'},
+];
+document.getElementById('reco-list').innerHTML = recos.map(r=>`
+  <div class="reco">
+    <span class="reco-priority ${r.p}">${r.p}</span>
+    <div class="reco-text">${r.text}<span class="deadline">⏱ ${r.deadline}</span></div>
+  </div>
+`).join('');
+
+/* ---- ranking de risco por dispositivo ---- */
+const riskDevices = [
+  {name:'ISP-LINK-B', score:96, factor:'link fora do ar', trend:'up'},
+  {name:'DIST-SW-02', score:74, factor:'CPU em tendência de alta', trend:'up'},
+  {name:'DHCP-01', score:66, factor:'pool próximo do limite', trend:'up'},
+  {name:'FW-EDGE-01', score:31, factor:'tentativas de acesso incomuns', trend:'flat'},
+  {name:'WLC-01', score:22, factor:'pico de reautenticações', trend:'down'},
+  {name:'CORE-SW-01', score:8, factor:'operação nominal', trend:'flat'},
+];
+function riskColor(s){ return s>=70?'var(--crit)': s>=40?'var(--warn)':'var(--ok)'; }
+function trendArrow(t){ return t==='up'?'<span class="trend-arrow up">▲</span>': t==='down'?'<span class="trend-arrow down">▼</span>':'<span class="trend-arrow flat">▬</span>'; }
+document.getElementById('risk-list').innerHTML = riskDevices.map(d=>`
+  <div class="risk-row">
+    ${trendArrow(d.trend)}
+    <div class="risk-name">${d.name}<div class="risk-factor">${d.factor}</div></div>
+    <div class="risk-bar-bg"><div class="risk-bar-fg" style="width:${d.score}%; background:${riskColor(d.score)}"></div></div>
+    <div class="risk-score" style="color:${riskColor(d.score)}">${d.score}</div>
+  </div>
+`).join('');
+
+/* ================= SEGURANÇA AVANÇADA ================= */
+
+/* ---- postura de segurança ---- */
+const postureScore = 78;
+document.getElementById('posture-ring').innerHTML = `
+  <svg class="posture-ring" viewBox="0 0 96 96">
+    <circle cx="48" cy="48" r="40" fill="none" stroke="var(--panel-2)" stroke-width="8"/>
+    <circle cx="48" cy="48" r="40" fill="none" stroke="${postureScore>=80?'var(--ok)':postureScore>=60?'var(--warn)':'var(--crit)'}" stroke-width="8"
+      stroke-dasharray="${2*Math.PI*40}" stroke-dashoffset="${2*Math.PI*40*(1-postureScore/100)}"
+      stroke-linecap="round" transform="rotate(-90 48 48)"/>
+    <text x="48" y="44" text-anchor="middle" font-family="var(--mono)" font-size="20" fill="var(--text)" font-weight="600">${postureScore}</text>
+    <text x="48" y="60" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--muted)">/ 100</text>
+  </svg>
+`;
+const postureBreak = [
+  {label:'Patching', pct:64, color:'var(--warn)'},
+  {label:'Regras de firewall', pct:91, color:'var(--ok)'},
+  {label:'Exposição externa', pct:83, color:'var(--ok)'},
+  {label:'Autenticação / MFA', pct:70, color:'var(--warn)'},
+];
+document.getElementById('posture-breakdown').innerHTML = postureBreak.map(p=>`
+  <div class="pb-row">
+    <span>${p.label}</span>
+    <div class="pb-bar-bg"><div class="pb-bar-fg" style="width:${p.pct}%; background:${p.color}"></div></div>
+    <span style="font-family:var(--mono); color:${p.color}">${p.pct}%</span>
+  </div>
+`).join('');
+
+/* ---- compliance de patches ---- */
+document.getElementById('patch-pct').innerHTML = '76% <span style="font-size:11px; color:var(--muted); font-weight:400;">dos dispositivos atualizados</span>';
+const patchDevices = [
+  {name:'FW-EDGE-01', status:'2 CVEs pendentes', sev:'high'},
+  {name:'DIST-SW-02', status:'1 CVE pendente', sev:'medium'},
+  {name:'WLC-01', status:'firmware desatualizado (3 versões)', sev:'high'},
+];
+document.getElementById('patch-list').innerHTML = patchDevices.map(d=>`
+  <div class="patch-row">
+    <span class="dev">${d.name}</span>
+    <span style="color:var(--muted); flex:1;">${d.status}</span>
+    <span class="sev-pill ${d.sev}">${d.sev}</span>
+  </div>
+`).join('');
+
+/* ---- vulnerabilidades abertas ---- */
+const vulns = [
+  {id:'CVE-2025-31442', dev:'FW-EDGE-01', sev:'critical', age:'6 dias'},
+  {id:'CVE-2025-28810', dev:'WLC-01', sev:'high', age:'14 dias'},
+  {id:'CVE-2025-30177', dev:'DIST-SW-02', sev:'medium', age:'21 dias'},
+  {id:'CVE-2024-49112', dev:'DNS-01', sev:'medium', age:'40 dias'},
+];
+document.getElementById('vuln-count-tag').textContent = vulns.length + ' abertas';
+document.getElementById('vuln-table').innerHTML = vulns.map(v=>`
+  <tr>
+    <td>${v.id}</td>
+    <td>${v.dev}</td>
+    <td><span class="sev-pill ${v.sev}">${v.sev}</span></td>
+    <td>${v.age}</td>
+  </tr>
+`).join('');
+
+/* ---- feed de ameaças ---- */
+const threats = [
+  {t:'14:32', desc:'Varredura de portas detectada a partir de 203.0.113.44 — bloqueada no perímetro', mitre:'T1595', sev:'warn'},
+  {t:'13:58', desc:'Múltiplas tentativas de login falhas em FW-EDGE-01 (possível brute force)', mitre:'T1110', sev:'warn'},
+  {t:'12:41', desc:'Tentativa de conexão a domínio C2 conhecido bloqueada por DNS sinkhole', mitre:'T1071', sev:'crit'},
+  {t:'11:20', desc:'Tráfego incomum de saída em ws-financeiro-22 — investigação automática iniciada', mitre:'T1041', sev:'info'},
+  {t:'09:07', desc:'Certificado TLS expirando em 5 dias detectado em FW-EDGE-01', mitre:'—', sev:'info'},
+];
+document.getElementById('threat-feed').innerHTML = threats.map(t=>`
+  <div class="threat-item">
+    <span class="threat-time">${t.t}</span>
+    <div>
+      <span class="badge ${t.sev}">${t.sev}</span>
+      <span style="margin-left:6px;">${t.desc}</span>
+      ${t.mitre!=='—' ? `<span class="mitre-tag">MITRE ${t.mitre}</span>` : ''}
+    </div>
+  </div>
+`).join('');
+
+/* ---- donut tráfego bloqueado vs permitido ---- */
+(function drawDonut(){
+  const allowed = 87, blocked = 13;
+  const r=50, cx=60, cy=60, circ=2*Math.PI*r;
+  const donut = document.getElementById('donut');
+  const blockedLen = circ*(blocked/100);
+  donut.innerHTML = `
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--ok)" stroke-width="14"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--crit)" stroke-width="14"
+      stroke-dasharray="${blockedLen} ${circ}" stroke-linecap="butt" transform="rotate(-90 ${cx} ${cy})"/>
+    <text x="${cx}" y="${cy+5}" text-anchor="middle" font-family="var(--mono)" font-size="16" fill="var(--text)" font-weight="600">${allowed}%</text>
+  `;
+  document.getElementById('donut-legend').innerHTML = `
+    <div class="dl-row"><div class="sw" style="background:var(--ok)"></div>Permitido (${allowed}%)</div>
+    <div class="dl-row"><div class="sw" style="background:var(--crit)"></div>Bloqueado (${blocked}%)</div>
+  `;
+})();
+
+/* ================= ÁRVORE DE IMPACTO — DA BORDA AO CLIENTE ================= */
+const exampleTreeData = {
+  id:'wan', label:'Borda WAN', layer:'borda', status:'warn', meta:'ISP-A ok (62%) · ISP-B crítico',
+  children:[
+    { id:'fw', label:'FW-EDGE-01', layer:'borda', status:'ok', meta:'firewall perimetral',
+      vendor:'Fortinet', model:'FortiGate 100F', serial:'FGT100F-A1B2C3', firmware:'FortiOS 7.4.2',
+      warrantyUntil:'2026-11-30', eolDate:'2029-05-01', owner:'João — Infra',
+      children:[
+        { id:'core', label:'CORE-SW-01', layer:'core', status:'ok', meta:'switch L3 core',
+          vendor:'Cisco', model:'Catalyst 9300', serial:'FCW2431A0XY', firmware:'IOS-XE 17.9.4',
+          warrantyUntil:'2026-09-15', eolDate:'2028-01-01', owner:'João — Infra',
+          children:[
+            { id:'olt1', label:'OLT-01', layer:'olt', status:'ok', meta:'8 portas PON · 62% ocupação',
+              vendor:'Huawei', model:'MA5800-X2', firmware:'V800R021',
+              children:[
+                { id:'vlan100', label:'VLAN 100 — Internet Residencial', layer:'vlan', status:'ok', meta:'192.168.100.0/22', vlanId:'VLAN 100',
+                  children:[
+                    { id:'cto045', label:'CTO 045', layer:'caixa', status:'warn', meta:'16 portas · 3 livres', address:'Rua das Flores, poste 45',
+                      children:[
+                        { id:'cli245', label:'Cliente — Casa 245', layer:'cliente', status:'ok', meta:'plano 300 Mbps', address:'Rua das Flores, nº 245', signal:'-19.4', clients:1, impacted:0, children:[] },
+                        { id:'cli247', label:'Cliente — Casa 247', layer:'cliente', status:'crit', meta:'ONU offline', address:'Rua das Flores, nº 247', signal:'sem sinal', clients:1, impacted:1, children:[] },
+                        { id:'cli251', label:'Cliente — Casa 251', layer:'cliente', status:'ok', meta:'plano 500 Mbps', address:'Rua das Flores, nº 251', signal:'-21.1', clients:1, impacted:0, children:[] },
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            { id:'dist', label:'DIST-SW-02', layer:'distribuição', status:'warn', meta:'CPU 71%',
+              vendor:'Cisco', model:'Catalyst 9200', serial:'FCW2298B7ZQ', firmware:'IOS-XE 17.6.1',
+              warrantyUntil:'2026-08-20', eolDate:'2027-03-01', owner:'Ana — Infra',
+              children:[
+                { id:'acc', label:'ACC-SW-14', layer:'acesso', status:'crit', meta:'portas 31–33 flapping',
+                  children:[
+                    { id:'fin', label:'Setor Financeiro', layer:'cliente', status:'crit', meta:'22 estações', clients:22, impacted:22, children:[] },
+                    { id:'rh', label:'Setor RH', layer:'cliente', status:'ok', meta:'14 estações', clients:14, impacted:0, children:[] },
+                    { id:'sala', label:'Sala de reuniões', layer:'cliente', status:'ok', meta:'6 estações', clients:6, impacted:0, children:[] },
+                  ]
+                }
+              ]
+            },
+            { id:'wlc', label:'WLC-01', layer:'distribuição', status:'ok', meta:'controladora wifi',
+              children:[
+                { id:'ap1', label:'AP Piso 1', layer:'acesso', status:'ok', meta:'64 dispositivos', clients:64, impacted:0, children:[] },
+                { id:'ap2', label:'AP Piso 2', layer:'acesso', status:'ok', meta:'58 dispositivos', clients:58, impacted:0, children:[] },
+                { id:'ap3', label:'AP Piso 3', layer:'acesso', status:'warn', meta:'71 disp. · reautenticações', clients:71, impacted:0, children:[] },
+              ]
+            },
+            { id:'svc', label:'Serviços Core', layer:'distribuição', status:'warn', meta:'DNS ok · DHCP pool 85%',
+              children:[
+                { id:'allseg', label:'Todos os segmentos', layer:'cliente', status:'ok', meta:'dependência indireta', clients:0, impacted:0, children:[] }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+};
+let impactTree = null;
+const UNIT=152, BOXW=136, BOXH=50, ROWH=90, PADTOP=14, PADSIDE=24;
+
+function findNode(node, id){
+  if(node.id===id) return node;
+  for(const c of (node.children||[])){ const r=findNode(c,id); if(r) return r; }
+  return null;
+}
+function findParentOf(node, id, parent=null){
+  if(node.id===id) return parent;
+  for(const c of (node.children||[])){ const r=findParentOf(c,id,node); if(r!==undefined && r!==null) return r; }
+  return null;
+}
+function nodeHasKids(node){ return node.children && node.children.length>0; }
+function countLeaves(node){
+  if(!nodeHasKids(node)) return 1;
+  return node.children.reduce((s,c)=>s+countLeaves(c),0);
+}
+function countImpacted(node){
+  if(!nodeHasKids(node)) return node.impacted||0;
+  return node.children.reduce((s,c)=>s+countImpacted(c),0);
+}
+/* caminho crítico calculado dinamicamente: qualquer folha crítica ou com clientes
+   impactados "acende" o caminho inteiro da raiz até ela — funciona pra qualquer rede */
+function computeOnPathSet(){
+  const result = new Set();
+  function walk(node, path){
+    const nextPath = path.concat(node.id);
+    if(!nodeHasKids(node)){
+      if(node.status==='crit' || (node.impacted && node.impacted>0)){
+        nextPath.forEach(id=>result.add(id));
+      }
+    } else {
+      node.children.forEach(c=>walk(c, nextPath));
+    }
+  }
+  walk(impactTree, []);
+  return result;
+}
+
+/* layout considera nós recolhidos como folhas temporárias */
+function computeLeaf(node){
+  if(node._collapsed || !nodeHasKids(node)){ node._leaf=1; return 1; }
+  let sum=0; node.children.forEach(c=> sum+=computeLeaf(c));
+  node._leaf = sum; return sum;
+}
+function assignPos(node, xOffset, depth){
+  node._depth = depth;
+  if(node._collapsed || !nodeHasKids(node)){ node._x = xOffset+UNIT/2; return xOffset+UNIT; }
+  let cx = xOffset;
+  node.children.forEach(c=>{ cx = assignPos(c, cx, depth+1); });
+  node._x = (node.children[0]._x + node.children[node.children.length-1]._x)/2;
+  return cx;
+}
+function maxDepthCalc(node,d=0){
+  if(node._collapsed || !nodeHasKids(node)) return d;
+  return Math.max(...node.children.map(c=>maxDepthCalc(c,d+1)));
+}
+
+const statusColorTree = {ok:'#34D399', warn:'#F0A63A', crit:'#F0454F'};
+
+function truncateText(s, n){ return (s && s.length>n) ? s.slice(0,n-1)+'…' : s; }
+
+function renderNode(node, parent, parts, onPathSet){
+  const y = node._depth*ROWH + PADTOP;
+  const cxNode = node._x + PADSIDE;
+  if(parent){
+    const py = parent._depth*ROWH + PADTOP + BOXH;
+    const pxNode = parent._x + PADSIDE;
+    const onPath = onPathSet.has(node.id) && onPathSet.has(parent.id);
+    const lineColor = onPath ? '#F0454F' : (node.status==='warn' ? 'rgba(240,166,58,0.55)' : 'var(--line)');
+    parts.push(`<path class="tree-link" d="M${pxNode},${py} C${pxNode},${(py+y)/2} ${cxNode},${(py+y)/2} ${cxNode},${y}" stroke="${lineColor}" stroke-width="${onPath?3:1.6}"/>`);
+  }
+  const bx = cxNode - BOXW/2, by = y;
+  const sc = statusColorTree[node.status] || 'var(--muted)';
+  const hasKids = nodeHasKids(node);
+  const collapsed = !!node._collapsed;
+  const extra = [node.meta, node.address, node.vlanId, node.signal ? node.signal+' dBm' : null].filter(Boolean).join(' · ');
+  const metaLine = collapsed
+    ? `▸ ${countLeaves(node)} itens${countImpacted(node)>0 ? ' · '+countImpacted(node)+' imp.' : ''} ocultos`
+    : truncateText(extra, 32);
+  parts.push(`
+    <g onclick="${hasKids ? `toggleNode('${node.id}')` : ''}">
+      <rect class="tree-node-rect ${hasKids?'has-kids':''}" x="${bx}" y="${by}" width="${BOXW}" height="${BOXH}" rx="8" stroke="${sc}" stroke-dasharray="${collapsed?'4 3':'none'}"/>
+      <text class="tree-eyebrow" x="${cxNode}" y="${by+11}" text-anchor="middle">${node.layer||''}</text>
+      <text class="tree-label" x="${cxNode}" y="${by+25}" text-anchor="middle">${node.label}</text>
+      <text class="${collapsed?'tree-hint':'tree-meta'}" x="${cxNode}" y="${by+37}" text-anchor="middle">${metaLine}</text>
+      <circle cx="${bx+11}" cy="${by+11}" r="3.2" fill="${sc}">
+        ${node.status==='crit' ? '<animate attributeName="opacity" values="1;0.2;1" dur="1s" repeatCount="indefinite"/>' : ''}
+      </circle>
+      ${node.impacted>0 && !collapsed ? `<rect class="tree-badge-bg" x="${bx+BOXW-56}" y="${by+BOXH-16}" width="52" height="14" rx="7"/><text class="tree-badge-text" x="${bx+BOXW-30}" y="${by+BOXH-6}" text-anchor="middle">${node.impacted} imp.</text>` : ''}
+      ${hasKids ? `<circle class="tree-toggle-bg" cx="${bx+BOXW-11}" cy="${by+11}" r="7"/><text class="tree-toggle-text" x="${bx+BOXW-11}" y="${by+14.5}" text-anchor="middle">${collapsed?'+':'−'}</text>` : ''}
+    </g>
+  `);
+  if(!collapsed){ (node.children||[]).forEach(c=>renderNode(c, node, parts, onPathSet)); }
+}
+
+function sumClients(node){
+  if(!nodeHasKids(node)) return {total:node.clients||0, impacted:node.impacted||0};
+  let t=0, im=0;
+  node.children.forEach(c=>{ const r=sumClients(c); t+=r.total; im+=r.impacted; });
+  return {total:t, impacted:im};
+}
+
+function daysUntil(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr+'T00:00:00');
+  if(isNaN(d.getTime())) return null;
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  return Math.round((d-now)/(1000*60*60*24));
+}
+function expiryBadge(days){
+  if(days===null) return `<span style="color:var(--muted)">—</span>`;
+  let color = 'var(--ok)';
+  if(days<0) color='var(--crit)';
+  else if(days<=90) color='var(--warn)';
+  const text = days<0 ? `venceu há ${Math.abs(days)}d` : `${days}d restantes`;
+  return `<span style="color:${color}; font-family:var(--mono); font-size:10.5px;">${text}</span>`;
+}
+function renderCMDB(){
+  const all = flattenNodes(impactTree);
+  const withData = all.filter(n=> n.vendor || n.model || n.serial || n.firmware || n.warrantyUntil || n.eolDate || n.owner);
+  withData.sort((a,b)=>{
+    const da = daysUntil(a.warrantyUntil) ?? daysUntil(a.eolDate) ?? Infinity;
+    const db = daysUntil(b.warrantyUntil) ?? daysUntil(b.eolDate) ?? Infinity;
+    return da-db;
+  });
+  document.getElementById('cmdb-count-tag').textContent = withData.length + ' com inventário';
+  const tbody = document.getElementById('cmdb-table');
+  tbody.innerHTML = withData.length ? withData.map(n=>{
+    const wDays = daysUntil(n.warrantyUntil), eDays = daysUntil(n.eolDate);
+    return `<tr>
+      <td>${n.label}<br><span style="color:var(--muted); font-size:9.5px;">${n.layer||''}</span></td>
+      <td>${[n.vendor,n.model].filter(Boolean).join(' ') || '—'}</td>
+      <td>${n.serial || '—'}</td>
+      <td>${n.firmware || '—'}</td>
+      <td>${n.warrantyUntil ? n.warrantyUntil+'<br>'+expiryBadge(wDays) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${n.eolDate ? n.eolDate+'<br>'+expiryBadge(eDays) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${n.owner || '—'}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="7" style="color:var(--muted); text-align:center; padding:16px 0;">Nenhum equipamento com dados de inventário ainda. Preencha fabricante, modelo, garantia etc. no cadastro de nós.</td></tr>`;
+
+  const expiredWarranty = withData.filter(n=>{ const d=daysUntil(n.warrantyUntil); return d!==null && d<0; }).length;
+  const nearEol = withData.filter(n=>{ const d=daysUntil(n.eolDate); return d!==null && d>=0 && d<=90; }).length;
+  const noInventory = all.length - withData.length;
+  document.getElementById('cmdb-summary').innerHTML = `
+    <div class="impact-stat"><div class="v">${withData.length}</div><div class="l">Equipamentos com inventário</div></div>
+    <div class="impact-stat crit"><div class="v">${expiredWarranty}</div><div class="l">Garantias vencidas</div></div>
+    <div class="impact-stat warn"><div class="v">${nearEol}</div><div class="l">Próximos do fim de suporte (90d)</div></div>
+    <div class="impact-stat"><div class="v">${noInventory}</div><div class="l">Nós sem dados de inventário</div></div>
+  `;
+}
+
+function renderTree(){
+  computeLeaf(impactTree);
+  assignPos(impactTree, 0, 0);
+  const treeDepth = maxDepthCalc(impactTree);
+  const totals = sumClients(impactTree);
+  const onPathSet = computeOnPathSet();
+
+  const svgW = impactTree._leaf*UNIT + PADSIDE*2;
+  const svgH = (treeDepth+1)*ROWH + BOXH + PADTOP + 10;
+  const treeSvg = document.getElementById('impact-tree-svg');
+  treeSvg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
+  treeSvg.style.width = Math.min(svgW, 1600)+'px';
+  treeSvg.style.height = svgH+'px';
+
+  let parts = [];
+  renderNode(impactTree, null, parts, onPathSet);
+  treeSvg.innerHTML = parts.join('');
+
+  const pctImpacted = totals.total>0 ? ((totals.impacted/totals.total)*100).toFixed(1) : '0.0';
+  const critLeaves = [];
+  (function findCrit(n){ if(!nodeHasKids(n)){ if(n.status==='crit'||n.impacted>0) critLeaves.push(n.label); } else n.children.forEach(findCrit); })(impactTree);
+  document.getElementById('impact-summary').innerHTML = `
+    <div class="impact-stat"><div class="v">${totals.total}</div><div class="l">Clientes monitorados na árvore</div></div>
+    <div class="impact-stat crit"><div class="v">${totals.impacted}</div><div class="l">Clientes impactados agora</div></div>
+    <div class="impact-stat crit"><div class="v">${pctImpacted}%</div><div class="l">% da base afetada</div></div>
+    <div class="impact-stat"><div class="v" style="font-size:13px;">${critLeaves.length ? critLeaves.join(', ') : 'Nenhum'}</div><div class="l">Ramos com impacto ativo</div></div>
+  `;
+  renderCMDB();
+}
+
+window.toggleNode = function(id){
+  const n = findNode(impactTree, id);
+  if(n && nodeHasKids(n)){ n._collapsed = !n._collapsed; renderTree(); }
+};
+window.setAllCollapse = function(val){
+  function rec(n){ if(nodeHasKids(n)){ n._collapsed = val; n.children.forEach(rec); } }
+  rec(impactTree);
+  renderTree();
+};
+window.focusIncidentPath = function(){
+  const onPathSet = computeOnPathSet();
+  function rec(n){
+    if(nodeHasKids(n)){
+      n._collapsed = !onPathSet.has(n.id);
+      n.children.forEach(rec);
+    }
+  }
+  rec(impactTree);
+  renderTree();
+};
+
+function pathToNode(root, targetId, path=[]){
+  const next = path.concat(root.id);
+  if(root.id === targetId) return next;
+  for(const c of (root.children||[])){
+    const r = pathToNode(c, targetId, next);
+    if(r) return r;
+  }
+  return null;
+}
+window.focusBranch = function(nodeId){
+  if(!nodeId){ setFeedback('Selecione um nó no menu ao lado para focar nele.', 'var(--warn)'); return; }
+  const path = pathToNode(impactTree, nodeId);
+  if(!path){ setFeedback('Nó não encontrado.', 'var(--crit)'); return; }
+  const pathSet = new Set(path);
+  function rec(n, insideTarget){
+    if(nodeHasKids(n)){
+      n._collapsed = !(insideTarget || pathSet.has(n.id));
+      const nowInside = insideTarget || n.id===nodeId;
+      n.children.forEach(c=>rec(c, nowInside));
+    }
+  }
+  rec(impactTree, false);
+  renderTree();
+};
+
+/* ================= CADASTRO / EDIÇÃO DA REDE DO USUÁRIO ================= */
+window.toggleRegistryPanel = function(){
+  const panel = document.getElementById('registry-panel');
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  document.getElementById('reg-toggle-btn').textContent = open ? 'Cadastrar minha rede' : 'Fechar cadastro';
+  if(!open) refreshDropdowns();
+};
+
+function flattenNodes(node, arr=[]){ arr.push(node); (node.children||[]).forEach(c=>flattenNodes(c,arr)); return arr; }
+
+function refreshDropdowns(){
+  const nodes = flattenNodes(impactTree);
+  const opts = nodes.map(n=>`<option value="${n.id}">${n.label} (${n.id})</option>`).join('');
+  document.getElementById('reg-parent').innerHTML = opts;
+  document.getElementById('reg-select-existing').innerHTML = '<option value="">— selecionar nó existente —</option>' + opts;
+}
+
+function setFeedback(msg, color){
+  const fb = document.getElementById('reg-feedback');
+  fb.textContent = msg; fb.style.color = color || 'var(--muted)';
+}
+
+window.addOrUpdateNode = function(){
+  const id = document.getElementById('reg-id').value.trim();
+  const label = document.getElementById('reg-label').value.trim();
+  const parentId = document.getElementById('reg-parent').value;
+  const layer = document.getElementById('reg-layer').value;
+  const status = document.getElementById('reg-status').value;
+  const meta = document.getElementById('reg-meta').value.trim();
+  const clients = parseInt(document.getElementById('reg-clients').value) || 0;
+  const impacted = parseInt(document.getElementById('reg-impacted').value) || 0;
+  const vendor = document.getElementById('reg-vendor').value.trim();
+  const model = document.getElementById('reg-model').value.trim();
+  const serial = document.getElementById('reg-serial').value.trim();
+  const firmware = document.getElementById('reg-firmware').value.trim();
+  const warrantyUntil = document.getElementById('reg-warranty').value;
+  const eolDate = document.getElementById('reg-eol').value;
+  const owner = document.getElementById('reg-owner').value.trim();
+  const address = document.getElementById('reg-address').value.trim();
+  const vlanId = document.getElementById('reg-vlanid').value.trim();
+  const signal = document.getElementById('reg-signal').value.trim();
+
+  if(!id || !label){ setFeedback('Preencha ao menos ID e nome do nó.', 'var(--crit)'); return; }
+  if(!/^[a-zA-Z0-9_-]+$/.test(id)){ setFeedback('ID deve conter só letras, números, - ou _ (sem espaços).', 'var(--crit)'); return; }
+
+  let node = findNode(impactTree, id);
+  if(node){
+    node.label=label; node.layer=layer; node.status=status; node.meta=meta; node.clients=clients; node.impacted=impacted;
+    node.vendor=vendor; node.model=model; node.serial=serial; node.firmware=firmware;
+    node.warrantyUntil=warrantyUntil; node.eolDate=eolDate; node.owner=owner;
+    node.address=address; node.vlanId=vlanId; node.signal=signal;
+    setFeedback(`Nó "${label}" atualizado.`, 'var(--ok)');
+  } else {
+    const parent = findNode(impactTree, parentId);
+    if(!parent){ setFeedback('Nó pai não encontrado — cadastre o pai primeiro.', 'var(--crit)'); return; }
+    if(!parent.children) parent.children = [];
+    parent.children.push({id, label, layer, status, meta, clients, impacted, vendor, model, serial, firmware, warrantyUntil, eolDate, owner, address, vlanId, signal, children:[]});
+    setFeedback(`Nó "${label}" adicionado sob "${parent.label}".`, 'var(--ok)');
+  }
+  refreshDropdowns();
+  renderTree();
+  saveTreeToStorage();
+};
+
+window.prepEditSelected = function(){
+  const id = document.getElementById('reg-select-existing').value;
+  if(!id) return;
+  const n = findNode(impactTree, id);
+  if(!n) return;
+  document.getElementById('reg-id').value = n.id;
+  document.getElementById('reg-label').value = n.label;
+  document.getElementById('reg-layer').value = n.layer || 'acesso';
+  document.getElementById('reg-status').value = n.status || 'ok';
+  document.getElementById('reg-meta').value = n.meta || '';
+  document.getElementById('reg-clients').value = n.clients || 0;
+  document.getElementById('reg-impacted').value = n.impacted || 0;
+  document.getElementById('reg-vendor').value = n.vendor || '';
+  document.getElementById('reg-model').value = n.model || '';
+  document.getElementById('reg-serial').value = n.serial || '';
+  document.getElementById('reg-firmware').value = n.firmware || '';
+  document.getElementById('reg-warranty').value = n.warrantyUntil || '';
+  document.getElementById('reg-eol').value = n.eolDate || '';
+  document.getElementById('reg-owner').value = n.owner || '';
+  document.getElementById('reg-address').value = n.address || '';
+  document.getElementById('reg-vlanid').value = n.vlanId || '';
+  document.getElementById('reg-signal').value = n.signal || '';
+  const parent = findParentOf(impactTree, id);
+  if(parent) document.getElementById('reg-parent').value = parent.id;
+  setFeedback(`Editando "${n.label}" — altere os campos e clique em "Adicionar / atualizar nó".`, 'var(--data)');
+};
+
+window.removeSelectedNode = function(){
+  const id = document.getElementById('reg-select-existing').value;
+  if(!id){ setFeedback('Selecione um nó para remover.', 'var(--warn)'); return; }
+  if(id === impactTree.id){ setFeedback('Não é possível remover a raiz — use "Começar do zero".', 'var(--crit)'); return; }
+  const parent = findParentOf(impactTree, id);
+  if(!parent){ setFeedback('Nó não encontrado.', 'var(--crit)'); return; }
+  const idx = parent.children.findIndex(c=>c.id===id);
+  const removed = parent.children.splice(idx,1)[0];
+  setFeedback(`Nó "${removed.label}" e seus filhos foram removidos.`, 'var(--ok)');
+  refreshDropdowns();
+  renderTree();
+  saveTreeToStorage();
+};
+
+window.exportTreeJSON = function(){
+  const clean = JSON.parse(JSON.stringify(impactTree, (k,v)=> k.startsWith('_') ? undefined : v));
+  const blob = new Blob([JSON.stringify(clean, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'minha-rede-topologia.json'; a.click();
+  URL.revokeObjectURL(url);
+  setFeedback('JSON exportado — guarde esse arquivo para reimportar depois.', 'var(--ok)');
+};
+
+window.importTreeJSON = function(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const parsed = JSON.parse(e.target.result);
+      if(!parsed.id || !parsed.label){ throw new Error('estrutura precisa ter ao menos "id" e "label" na raiz'); }
+      impactTree = parsed;
+      refreshDropdowns();
+      renderTree();
+      saveTreeToStorage();
+      setFeedback('Rede importada com sucesso.', 'var(--ok)');
+    }catch(err){
+      setFeedback('Erro ao importar: ' + err.message, 'var(--crit)');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+};
+
+window.resetTreeEmpty = function(){
+  if(!confirm('Isso apaga a árvore atual e começa do zero. Continuar?')) return;
+  impactTree = {id:'raiz', label:'Minha rede', layer:'borda', status:'ok', meta:'clique em "Adicionar / atualizar nó" para começar', clients:0, impacted:0, children:[]};
+  refreshDropdowns();
+  renderTree();
+  saveTreeToStorage();
+  setFeedback('Árvore limpa. Cadastre o primeiro nó (ex: seu roteador de borda).', 'var(--data)');
+};
+
+window.loadExampleTree = function(){
+  impactTree = JSON.parse(JSON.stringify(exampleTreeData));
+  refreshDropdowns();
+  renderTree();
+  saveTreeToStorage();
+  setFeedback('Exemplo carregado.', 'var(--data)');
+};
+
+/* ================= PERSISTÊNCIA AUTOMÁTICA ================= */
+const STORAGE_KEY = 'rede-topologia';
+
+function setSaveStatus(msg, color){
+  const el = document.getElementById('save-status');
+  if(el){ el.textContent = msg; el.style.color = color || 'var(--muted)'; }
+}
+
+async function saveTreeToStorage(){
+  if(typeof window.storage === 'undefined'){
+    setSaveStatus('Armazenamento automático indisponível — use exportar/importar JSON.', 'var(--warn)');
+    return;
+  }
+  try{
+    const clean = JSON.parse(JSON.stringify(impactTree, (k,v)=> k.startsWith('_') ? undefined : v));
+    await window.storage.set(STORAGE_KEY, JSON.stringify(clean), false);
+    setSaveStatus('✓ salvo automaticamente', 'var(--ok)');
+  }catch(err){
+    setSaveStatus('Falha ao salvar: ' + err.message, 'var(--crit)');
+  }
+}
+
+async function loadTreeFromStorage(){
+  if(typeof window.storage === 'undefined') return null;
+  try{
+    const res = await window.storage.get(STORAGE_KEY, false);
+    if(res && res.value) return JSON.parse(res.value);
+    return null;
+  }catch(err){
+    return null;
+  }
+}
+
+window.clearSavedData = async function(){
+  if(!confirm('Isso apaga o cadastro salvo automaticamente (a árvore em tela continua até você recarregar a página). Continuar?')) return;
+  if(typeof window.storage === 'undefined'){ setFeedback('Armazenamento automático indisponível neste ambiente.', 'var(--warn)'); return; }
+  try{
+    await window.storage.delete(STORAGE_KEY, false);
+    setFeedback('Dados salvos apagados. Recarregue a página para começar do zero.', 'var(--ok)');
+    setSaveStatus('dados salvos apagados', 'var(--muted)');
+  }catch(err){
+    setFeedback('Erro ao apagar: ' + err.message, 'var(--crit)');
+  }
+};
+
+(async function initTree(){
+  const loaded = await loadTreeFromStorage();
+  impactTree = loaded || JSON.parse(JSON.stringify(exampleTreeData));
+  refreshDropdowns();
+  renderTree();
+  if(loaded){
+    setSaveStatus('rede carregada do último cadastro salvo', 'var(--data)');
+  } else if(typeof window.storage === 'undefined'){
+    setSaveStatus('sem armazenamento automático — use exportar/importar JSON', 'var(--warn)');
+  } else {
+    setSaveStatus('nenhum cadastro salvo ainda — exibindo exemplo', 'var(--muted)');
+  }
+})();
+</script>
+</body>
+</html>
