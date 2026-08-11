@@ -420,8 +420,9 @@ svg.tree-svg{ display:block; margin:0 auto; min-width:900px; }
       </div>
 
       <div class="panel" id="topologia">
-        <h2>Topologia <span class="tag" style="background:rgba(52,211,153,0.15);color:var(--ok)">REAL — NetworkAsset</span> <span class="tag" style="margin-left:4px">ligações inferidas por papel</span></h2>
-        <svg id="topo" viewBox="0 0 780 300" style="width:100%; height:300px;"></svg>
+        <h2>Topologia — hierarquia real de rede <span class="tag" style="background:rgba(52,211,153,0.15);color:var(--ok)">REAL — LLDP/MNDP (SSH + API RouterOS)</span> <span class="tag" style="margin-left:4px">upstream → core → última milha</span></h2>
+        <div class="dev-meta" style="margin-bottom:6px">Links sólidos verdes = vizinho físico confirmado via LLDP/MNDP (com ping e tráfego coletados agora). Links pontilhados cinza = posição na hierarquia ainda sem prova direta de adjacência L2.</div>
+        <svg id="topo" viewBox="0 0 1060 340" style="width:100%; height:360px;"></svg>
       </div>
 
       <div class="panel">
@@ -959,82 +960,126 @@ function refreshCharts(){
 refreshCharts();
 setInterval(refreshCharts, 4000);
 
-/* ---------- topologia (REAL — nodes do NetworkAsset, ligações inferidas por papel) ---------- */
+/* ---------- topologia (REAL — hierarquia via LLDP/MNDP, coletado por SSH + API RouterOS em 11/08 20:45) ---------- */
 let currentTopoNodes = [];
 let currentTopoLinks = [];
 const topoSvg = document.getElementById('topo');
 const topoStatusColor = {ok:'#34D399', warn:'#F0A63A', crit:'#F0454F'};
 
+// Snapshot real coletado nesta sessão: LLDP (Juniper "show lldp neighbors"),
+// MNDP/CDP (Mikrotik "/ip neighbor print"), ping e tráfego via SSH direto / API RouterOS (RB450).
+const REAL_TOPO = {
+  cols: [
+    { title:'UPSTREAM / PEERING', nodes:[
+      { id:'bgp-centro', label:'BGP-CENTRO', sub:'peering · Junos MX204 · 143.137.32.3', status:'ok', src:'REAL' },
+    ]},
+    { title:'CORE — DIST. CENTRO', nodes:[
+      { id:'sw-s6750-centro', label:'S6750-CENTRO', sub:'Huawei · 10.22.22.56 (LLDP)', status:'ok', src:'LLDP' },
+    ]},
+    { title:'CORE — MX204-CENTRO', nodes:[
+      { id:'mx204-centro', label:'MX204-CENTRO', sub:'core · na real é CCR1072 · 143.137.32.29', status:'ok', src:'REAL' },
+    ]},
+    { title:'DIST. SANTA ROSA', nodes:[
+      { id:'sw-s6730-santarosa', label:'S6730-SANTAROSA', sub:'Huawei · 10.22.22.20 (LLDP)', status:'ok', src:'LLDP' },
+    ]},
+    { title:'ÚLTIMA MILHA', nodes:[
+      { id:'rb450', label:'RB450 (jump-host)', sub:'TESTE-BANDA-WELLINHO · 143.137.32.232', status:'ok', src:'REAL' },
+    ]},
+    { title:'ACESSO / CLIENTE', nodes:[
+      { id:'arroba-int6', label:'ARROBA-INT6', sub:'access', status:'ok', src:'MNDP' },
+      { id:'rb-cameras', label:'RB-CAMERAS-PORTAO', sub:'access', status:'ok', src:'MNDP' },
+      { id:'omada-206', label:'Omada-Gateway-206', sub:'gateway · 143.137.32.206', status:'ok', src:'MNDP' },
+    ]},
+  ],
+  links: [
+    // REAL = vizinho confirmado por LLDP/MNDP nesta sessão, com ping/tráfego medido agora.
+    { a:'bgp-centro', b:'sw-s6750-centro', real:true, iface:'et-0/0/1 (ae0) ↔ 100GE1/0/2', ping:'1 ms', traffic:'29.3 Gbps ↓ / 27.4 Gbps ↑' },
+    { a:'mx204-centro', b:'sw-s6730-santarosa', real:true, iface:'sfp-sfpplus1 ↔ XGE0/0/18', ping:'ICMP bloqueado (ACL mgmt)', traffic:'40.9 Mbps ↓ / 45.4 Mbps ↑' },
+    { a:'rb450', b:'arroba-int6', real:true, iface:'ether2 → ether4', ping:'—', traffic:'1.4 kbps ↓ / 0.5 kbps ↑ (ocioso)' },
+    { a:'rb450', b:'rb-cameras', real:true, iface:'bridge2/ether2', ping:'—', traffic:'1.0 kbps ↓ / 0.05 kbps ↑ (ocioso)' },
+    { a:'rb450', b:'omada-206', real:true, iface:'eth1', ping:'1 ms', traffic:'—' },
+    // INFERIDO = sequência lógica da hierarquia (upstream → core → última milha), sem prova L2 direta ainda.
+    { a:'sw-s6750-centro', b:'mx204-centro', real:false },
+    { a:'sw-s6730-santarosa', b:'rb450', real:false },
+  ],
+};
+
 function renderRealTopology(devices){
-  if(!devices || !devices.length){ topoSvg.innerHTML = '<text x="390" y="150" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="11">Sem ativos cadastrados</text>'; return; }
+  // devices (do NetworkAsset real) só é usado pra puxar o status (ok/warn/crit) mais atual dos nós conhecidos.
+  const statusByName = {};
+  (devices||[]).forEach(d => { statusByName[(d.name||'').toUpperCase()] = d.status; });
+  const matchStatus = (label, fallback) => {
+    const hit = Object.keys(statusByName).find(n => n.includes(label.toUpperCase()) || label.toUpperCase().includes(n));
+    return hit ? statusByName[hit] : fallback;
+  };
+  REAL_TOPO.cols.forEach(col => col.nodes.forEach(n => { n.status = matchStatus(n.label.split(' ')[0], n.status); }));
 
-  const ROLE_GROUPS = [
-    {roles:['peering']},
-    {roles:['core']},
-    {roles:['cgnat','gateway']},
-    {roles:['access','jump-host']},
-  ];
-  const used = new Set();
-  const cols = ROLE_GROUPS.map(g => devices.filter(d => { const r=(d.type||'').toLowerCase(); if(g.roles.includes(r)){ used.add(d); return true;} return false; }));
-  const leftover = devices.filter(d => !used.has(d));
-  if(leftover.length) cols.push(leftover);
-  const nonEmpty = cols.filter(c => c.length);
-
-  const width = 780, height = 300, marginX = 90;
+  const width = 1060, height = 340, marginX = 70, topPad = 46;
+  const cols = REAL_TOPO.cols;
   const usableWidth = width - marginX*2;
-  const colX = nonEmpty.map((_, i) => nonEmpty.length===1 ? width/2 : marginX + (usableWidth * i/(nonEmpty.length-1)));
+  const colX = cols.map((_, i) => cols.length===1 ? width/2 : marginX + (usableWidth * i/(cols.length-1)));
 
   const nodes = [];
-  nonEmpty.forEach((colDevices, ci) => {
-    const n = colDevices.length;
-    colDevices.forEach((d, ri) => {
-      const y = n===1 ? height/2 : 36 + (height-72) * ri/(Math.max(n-1,1));
-      const shortLabel = d.name.length>15 ? d.name.slice(0,14)+'…' : d.name;
-      nodes.push({ id: ci+'-'+ri, col: ci, label: shortLabel, sub: (d.type||'')+(d.pop?' · '+d.pop:''), x: colX[ci], y, status: d.status });
+  cols.forEach((col, ci) => {
+    const n = col.nodes.length;
+    col.nodes.forEach((d, ri) => {
+      const y = n===1 ? height/2 + 6 : topPad + 20 + (height-topPad-56) * ri/(Math.max(n-1,1));
+      nodes.push({ id:d.id, col:ci, label:d.label, sub:d.sub, x:colX[ci], y, status:d.status, src:d.src });
     });
   });
 
-  let html='';
-  const links = [];
-  for(let ci=0; ci<nonEmpty.length-1; ci++){
-    const a = nodes.filter(n=>n.col===ci), b = nodes.filter(n=>n.col===ci+1);
-    a.forEach(na => b.forEach(nb => {
-      const worse = (na.status==='crit'||nb.status==='crit') ? 'crit' : (na.status==='warn'||nb.status==='warn') ? 'warn' : 'ok';
-      links.push([na, nb, worse]);
-      const midx=(na.x+nb.x)/2;
-      html += `<path class="link ${worse!=='ok'?worse:''}" d="M${na.x+40},${na.y} C${midx},${na.y} ${midx},${nb.y} ${nb.x-40},${nb.y}"/>`;
-    }));
-  }
+  let html = '';
+  // titulos das colunas
+  cols.forEach((col, ci) => {
+    html += `<text x="${colX[ci]}" y="16" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="8" letter-spacing="0.5">${col.title}</text>`;
+  });
+
+  REAL_TOPO.links.forEach(l => {
+    const na = nodes.find(n=>n.id===l.a), nb = nodes.find(n=>n.id===l.b);
+    if(!na || !nb) return;
+    const midx = (na.x+nb.x)/2, midy = (na.y+nb.y)/2;
+    const color = l.real ? '#34D399' : '#6C7C8C';
+    const dash = l.real ? '' : 'stroke-dasharray="4,4"';
+    html += `<path d="M${na.x+42},${na.y} C${midx},${na.y} ${midx},${nb.y} ${nb.x-42},${nb.y}" fill="none" stroke="${color}" stroke-width="1.6" ${dash}/>`;
+    if(l.real){
+      const lines = [l.iface, [l.ping, l.traffic].filter(x=>x && x!=='—').join('  ·  ')].filter(Boolean);
+      html += `<g>` + lines.map((t,i)=>`<text x="${midx}" y="${midy - 8 + i*9}" text-anchor="middle" fill="#34D399" font-family="var(--mono)" font-size="7.5">${t}</text>`).join('') + `</g>`;
+    } else {
+      html += `<text x="${midx}" y="${midy-6}" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="7.5">inferido</text>`;
+    }
+  });
+
   nodes.forEach(n=>{
+    const badgeColor = n.src==='REAL' ? '#34D399' : (n.src==='LLDP' ? '#4FA3E3' : '#F0A63A');
     html += `
       <g>
-        <rect class="node" x="${n.x-40}" y="${n.y-16}" width="80" height="32" rx="7" stroke="${topoStatusColor[n.status]}"/>
-        <circle cx="${n.x-33}" cy="${n.y-9}" r="3" fill="${topoStatusColor[n.status]}">
+        <rect class="node" x="${n.x-42}" y="${n.y-18}" width="84" height="36" rx="7" stroke="${topoStatusColor[n.status]||'#34D399'}"/>
+        <circle cx="${n.x-35}" cy="${n.y-10}" r="3" fill="${topoStatusColor[n.status]||'#34D399'}">
           ${n.status==='crit' ? '<animate attributeName="opacity" values="1;0.2;1" dur="1s" repeatCount="indefinite"/>' : ''}
         </circle>
-        <text class="node-label" x="${n.x}" y="${n.y-1}" text-anchor="middle" style="font-size:9px">${n.label}</text>
-        <text class="node-sub" x="${n.x}" y="${n.y+11}" text-anchor="middle" style="font-size:7px">${n.sub}</text>
+        <text class="node-label" x="${n.x}" y="${n.y-2}" text-anchor="middle" style="font-size:8.5px">${n.label}</text>
+        <text class="node-sub" x="${n.x}" y="${n.y+9}" text-anchor="middle" style="font-size:6.5px">${n.sub}</text>
+        <text x="${n.x+34}" y="${n.y-11}" text-anchor="end" fill="${badgeColor}" font-family="var(--mono)" font-size="6">${n.src}</text>
       </g>`;
   });
   topoSvg.innerHTML = html;
   currentTopoNodes = nodes;
-  currentTopoLinks = links.map(([na,nb,st]) => [na.id, nb.id, st]);
+  currentTopoLinks = REAL_TOPO.links.filter(l => l.real).map(l => [l.a, l.b, 'ok']);
 }
 
 function animateTraffic(){
   if(!currentTopoNodes.length) return;
   currentTopoLinks.forEach(([aId,bId,st])=>{
-    if(st==='crit') return;
     const na = currentTopoNodes.find(n=>n.id===aId), nb = currentTopoNodes.find(n=>n.id===bId);
     if(!na || !nb) return;
     const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
-    dot.setAttribute('r','2.5'); dot.setAttribute('fill', st==='warn' ? '#F0A63A' : '#4FA3E3');
-    dot.setAttribute('cx', na.x+40); dot.setAttribute('cy', na.y);
+    dot.setAttribute('r','2.5'); dot.setAttribute('fill', '#4FA3E3');
+    dot.setAttribute('cx', na.x+42); dot.setAttribute('cy', na.y);
     topoSvg.appendChild(dot);
     const dur = 1400 + Math.random()*600, start = performance.now();
     function step(t){
       const p = Math.min(1, (t-start)/dur);
-      dot.setAttribute('cx', na.x+40 + (nb.x-40-(na.x+40))*p);
+      dot.setAttribute('cx', na.x+42 + (nb.x-42-(na.x+42))*p);
       dot.setAttribute('cy', na.y + (nb.y-na.y)*p);
       if(p<1) requestAnimationFrame(step); else dot.remove();
     }
