@@ -1002,17 +1002,17 @@ const REAL_TOPO = {
     ]},
   ],
   links: [
-    // REAL = peers BGP confirmados agora via "show bgp summary" no BGP-CENTRO.
-    { a:'up-forte', b:'bgp-centro', real:true, iface:'10.200.203.97 (AS263009)', ping:'Establ', traffic:'1.058.893 rotas aceitas' },
-    { a:'up-forte', b:'bgp-santarosa', real:true, iface:'10.200.203.161 (AS263009)', ping:'Establ', traffic:'1.058.579 rotas aceitas' },
-    { a:'up-tuddo', b:'bgp-centro', real:true, iface:'172.20.255.254 (AS268696)', ping:'Establ', traffic:'1.086.252 rotas aceitas' },
-    { a:'up-tuddo', b:'bgp-santarosa', real:true, iface:'172.30.229.17/.25/.33 (AS268696)', ping:'2 caídas (Idle/Connect), só 1 Establ', traffic:'9.449 rotas (parcial)' },
-    { a:'up-ixbr', b:'bgp-centro', real:true, iface:'45.68.80.253/.254 (AS26162)', ping:'Establ', traffic:'158.173/158.187 rotas' },
-    { a:'up-ixbr', b:'bgp-santarosa', real:true, iface:'45.68.80.253/.254 + 187.16.216.253/.254 (AS26162)', ping:'Establ', traffic:'~727k rotas somadas' },
-    { a:'up-alfa', b:'bgp-centro', real:true, iface:'138.59.40.33 (AS264596)', ping:'Establ', traffic:'209.052 rotas aceitas' },
-    { a:'up-google', b:'bgp-centro', real:true, iface:'72.14.204.232 (AS15169)', ping:'Establ · 17 flaps', traffic:'4.718 rotas aceitas' },
-    { a:'up-cloudflare', b:'bgp-centro', real:true, iface:'187.16.208.188 (AS13335)', ping:'Establ (anômalo)', traffic:'8.120 recebidas / 0 aceitas' },
-    { a:'up-akamai', b:'bgp-centro', real:true, iface:'64.191.233.65/.248 (AS20940)', ping:'Idle · Idle', traffic:'0 rotas (sessão caída)' },
+    // REAL = peers BGP confirmados agora via "show bgp summary" no BGP-CENTRO. Sem label na linha (info já no card do nó) pra não poluir.
+    { a:'up-forte', b:'bgp-centro', real:true, noLabel:true },
+    { a:'up-forte', b:'bgp-santarosa', real:true, noLabel:true },
+    { a:'up-tuddo', b:'bgp-centro', real:true, noLabel:true },
+    { a:'up-tuddo', b:'bgp-santarosa', real:true, noLabel:true },
+    { a:'up-ixbr', b:'bgp-centro', real:true, noLabel:true },
+    { a:'up-ixbr', b:'bgp-santarosa', real:true, noLabel:true },
+    { a:'up-alfa', b:'bgp-centro', real:true, noLabel:true },
+    { a:'up-google', b:'bgp-centro', real:true, noLabel:true },
+    { a:'up-cloudflare', b:'bgp-centro', real:true, noLabel:true },
+    { a:'up-akamai', b:'bgp-centro', real:true, noLabel:true },
     // REAL = vizinho confirmado por LLDP/MNDP nesta sessão, com ping/tráfego medido agora.
     { a:'bgp-centro', b:'sw-s6750-centro', real:true, iface:'et-0/0/1 (ae0) ↔ 100GE1/0/2', ping:'1 ms', traffic:'29.3 Gbps ↓ / 27.4 Gbps ↑' },
     { a:'mx204-centro', b:'sw-s6730-santarosa', real:true, iface:'sfp-sfpplus1 ↔ XGE0/0/18', ping:'ICMP bloqueado (ACL mgmt)', traffic:'40.9 Mbps ↓ / 45.4 Mbps ↑' },
@@ -1062,8 +1062,11 @@ function renderRealTopology(devices){
     const worse = (na.status==='crit'||nb.status==='crit') ? 'crit' : (na.status==='warn'||nb.status==='warn') ? 'warn' : 'ok';
     const color = !l.real ? '#6C7C8C' : (worse==='crit' ? '#F0454F' : worse==='warn' ? '#F0A63A' : '#34D399');
     const dash = l.real ? '' : 'stroke-dasharray="4,4"';
-    html += `<path d="M${na.x+42},${na.y} C${midx},${na.y} ${midx},${nb.y} ${nb.x-42},${nb.y}" fill="none" stroke="${color}" stroke-width="1.6" ${dash}/>`;
-    if(l.real){
+    const opacity = l.noLabel ? 0.55 : 1;
+    html += `<path d="M${na.x+42},${na.y} C${midx},${na.y} ${midx},${nb.y} ${nb.x-42},${nb.y}" fill="none" stroke="${color}" stroke-width="1.4" stroke-opacity="${opacity}" ${dash}/>`;
+    if(l.noLabel){
+      // sem texto na linha — detalhe do peer já está no card do nó de origem, evita poluição visual do fan-in.
+    } else if(l.real){
       const lines = [l.iface, [l.ping, l.traffic].filter(x=>x && x!=='—').join('  ·  ')].filter(Boolean);
       html += `<g>` + lines.map((t,i)=>`<text x="${midx}" y="${midy - 8 + i*9}" text-anchor="middle" fill="${color}" font-family="var(--mono)" font-size="7.5">${t}</text>`).join('') + `</g>`;
     } else {
