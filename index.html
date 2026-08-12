@@ -1002,17 +1002,17 @@ const REAL_TOPO = {
     ]},
   ],
   links: [
-    // REAL = peers BGP confirmados agora via "show bgp summary" no BGP-CENTRO. Sem label na linha (info já no card do nó) pra não poluir.
-    { a:'up-forte', b:'bgp-centro', real:true, noLabel:true },
-    { a:'up-forte', b:'bgp-santarosa', real:true, noLabel:true },
-    { a:'up-tuddo', b:'bgp-centro', real:true, noLabel:true },
-    { a:'up-tuddo', b:'bgp-santarosa', real:true, noLabel:true },
-    { a:'up-ixbr', b:'bgp-centro', real:true, noLabel:true },
-    { a:'up-ixbr', b:'bgp-santarosa', real:true, noLabel:true },
-    { a:'up-alfa', b:'bgp-centro', real:true, noLabel:true },
-    { a:'up-google', b:'bgp-centro', real:true, noLabel:true },
-    { a:'up-cloudflare', b:'bgp-centro', real:true, noLabel:true },
-    { a:'up-akamai', b:'bgp-centro', real:true, noLabel:true },
+    // REAL = peers BGP confirmados agora via "show bgp summary" no BGP-CENTRO. Só o ping/estado na linha (resto no card do nó) pra não poluir.
+    { a:'up-forte', b:'bgp-centro', real:true, ping:'Establ' },
+    { a:'up-forte', b:'bgp-santarosa', real:true, ping:'Establ' },
+    { a:'up-tuddo', b:'bgp-centro', real:true, ping:'Establ' },
+    { a:'up-tuddo', b:'bgp-santarosa', real:true, ping:'1 Establ / 2 caídas' },
+    { a:'up-ixbr', b:'bgp-centro', real:true, ping:'Establ' },
+    { a:'up-ixbr', b:'bgp-santarosa', real:true, ping:'Establ' },
+    { a:'up-alfa', b:'bgp-centro', real:true, ping:'Establ' },
+    { a:'up-google', b:'bgp-centro', real:true, ping:'Establ · 17 flaps' },
+    { a:'up-cloudflare', b:'bgp-centro', real:true, ping:'Establ (anômalo)' },
+    { a:'up-akamai', b:'bgp-centro', real:true, ping:'Idle · Idle' },
     // REAL = vizinho confirmado por LLDP/MNDP nesta sessão, com ping/tráfego medido agora.
     { a:'bgp-centro', b:'sw-s6750-centro', real:true, iface:'et-0/0/1 (ae0) ↔ 100GE1/0/2', ping:'1 ms', traffic:'29.3 Gbps ↓ / 27.4 Gbps ↑' },
     { a:'mx204-centro', b:'sw-s6730-santarosa', real:true, iface:'sfp-sfpplus1 ↔ XGE0/0/18', ping:'ICMP bloqueado (ACL mgmt)', traffic:'40.9 Mbps ↓ / 45.4 Mbps ↑' },
@@ -1062,14 +1062,13 @@ function renderRealTopology(devices){
     const worse = (na.status==='crit'||nb.status==='crit') ? 'crit' : (na.status==='warn'||nb.status==='warn') ? 'warn' : 'ok';
     const color = !l.real ? '#6C7C8C' : (worse==='crit' ? '#F0454F' : worse==='warn' ? '#F0A63A' : '#34D399');
     const dash = l.real ? '' : 'stroke-dasharray="4,4"';
-    const opacity = l.noLabel ? 0.55 : 1;
-    html += `<path d="M${na.x+42},${na.y} C${midx},${na.y} ${midx},${nb.y} ${nb.x-42},${nb.y}" fill="none" stroke="${color}" stroke-width="1.4" stroke-opacity="${opacity}" ${dash}/>`;
-    if(l.noLabel){
-      // sem texto na linha — detalhe do peer já está no card do nó de origem, evita poluição visual do fan-in.
-    } else if(l.real){
+    html += `<path d="M${na.x+42},${na.y} C${midx},${na.y} ${midx},${nb.y} ${nb.x-42},${nb.y}" fill="none" stroke="${color}" stroke-width="1.4" ${dash}/>`;
+    if(l.iface){
       const lines = [l.iface, [l.ping, l.traffic].filter(x=>x && x!=='—').join('  ·  ')].filter(Boolean);
       html += `<g>` + lines.map((t,i)=>`<text x="${midx}" y="${midy - 8 + i*9}" text-anchor="middle" fill="${color}" font-family="var(--mono)" font-size="7.5">${t}</text>`).join('') + `</g>`;
-    } else {
+    } else if(l.real && l.ping){
+      html += `<text x="${midx}" y="${midy-6}" text-anchor="middle" fill="${color}" font-family="var(--mono)" font-size="7">${l.ping}</text>`;
+    } else if(!l.real){
       html += `<text x="${midx}" y="${midy-6}" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="7.5">inferido</text>`;
     }
   });
