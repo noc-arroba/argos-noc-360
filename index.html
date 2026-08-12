@@ -971,15 +971,17 @@ const topoStatusColor = {ok:'#34D399', warn:'#F0A63A', crit:'#F0454F'};
 const REAL_TOPO = {
   cols: [
     { title:'UPSTREAM (PEERS BGP)', nodes:[
-      { id:'up-forte', label:'FORTE (AS263009)', sub:'transit · full table', status:'ok', src:'REAL' },
-      { id:'up-tuddo', label:'TUDDO (AS268696)', sub:'transit · full table', status:'ok', src:'REAL' },
-      { id:'up-alfa', label:'ALFA TELECOM (AS264596)', sub:'transit · 209k rotas', status:'ok', src:'REAL' },
-      { id:'up-google', label:'Google (AS15169)', sub:'peering direto', status:'ok', src:'REAL' },
-      { id:'up-cloudflare', label:'Cloudflare (AS13335)', sub:'Establ mas 0 rotas aceitas!', status:'warn', src:'REAL' },
-      { id:'up-akamai', label:'Akamai (AS20940)', sub:'2 sessões DOWN (Idle)', status:'crit', src:'REAL' },
+      { id:'up-forte', label:'FORTE (AS263009)', sub:'transit · full table · em ambos', status:'ok', src:'REAL' },
+      { id:'up-tuddo', label:'TUDDO (AS268696)', sub:'transit · degradado em Sta.Rosa', status:'warn', src:'REAL' },
+      { id:'up-ixbr', label:'IX.br / NIC.BR (AS26162)', sub:'peering PTT · em ambos', status:'ok', src:'REAL' },
+      { id:'up-alfa', label:'ALFA TELECOM (AS264596)', sub:'transit · só Centro · 209k rotas', status:'ok', src:'REAL' },
+      { id:'up-google', label:'Google (AS15169)', sub:'peering direto · só Centro', status:'ok', src:'REAL' },
+      { id:'up-cloudflare', label:'Cloudflare (AS13335)', sub:'só Centro · Establ mas 0 rotas!', status:'warn', src:'REAL' },
+      { id:'up-akamai', label:'Akamai (AS20940)', sub:'só Centro · 2 sessões DOWN', status:'crit', src:'REAL' },
     ]},
-    { title:'UPSTREAM / PEERING', nodes:[
-      { id:'bgp-centro', label:'BGP-CENTRO', sub:'peering · Junos MX204 · 143.137.32.3', status:'ok', src:'REAL' },
+    { title:'UPSTREAM / PEERING (2 BGPs)', nodes:[
+      { id:'bgp-centro', label:'BGP-CENTRO', sub:'ANB-BRAS01-MX204 · 143.137.32.3', status:'ok', src:'REAL' },
+      { id:'bgp-santarosa', label:'BGP-SANTA-ROSA', sub:'ANB-BRAS02-MX204 · 143.137.32.4', status:'warn', src:'REAL' },
     ]},
     { title:'CORE — DIST. CENTRO', nodes:[
       { id:'sw-s6750-centro', label:'S6750-CENTRO', sub:'Huawei · 10.22.22.56 (LLDP)', status:'ok', src:'LLDP' },
@@ -1002,7 +1004,11 @@ const REAL_TOPO = {
   links: [
     // REAL = peers BGP confirmados agora via "show bgp summary" no BGP-CENTRO.
     { a:'up-forte', b:'bgp-centro', real:true, iface:'10.200.203.97 (AS263009)', ping:'Establ', traffic:'1.058.893 rotas aceitas' },
+    { a:'up-forte', b:'bgp-santarosa', real:true, iface:'10.200.203.161 (AS263009)', ping:'Establ', traffic:'1.058.579 rotas aceitas' },
     { a:'up-tuddo', b:'bgp-centro', real:true, iface:'172.20.255.254 (AS268696)', ping:'Establ', traffic:'1.086.252 rotas aceitas' },
+    { a:'up-tuddo', b:'bgp-santarosa', real:true, iface:'172.30.229.17/.25/.33 (AS268696)', ping:'2 caídas (Idle/Connect), só 1 Establ', traffic:'9.449 rotas (parcial)' },
+    { a:'up-ixbr', b:'bgp-centro', real:true, iface:'45.68.80.253/.254 (AS26162)', ping:'Establ', traffic:'158.173/158.187 rotas' },
+    { a:'up-ixbr', b:'bgp-santarosa', real:true, iface:'45.68.80.253/.254 + 187.16.216.253/.254 (AS26162)', ping:'Establ', traffic:'~727k rotas somadas' },
     { a:'up-alfa', b:'bgp-centro', real:true, iface:'138.59.40.33 (AS264596)', ping:'Establ', traffic:'209.052 rotas aceitas' },
     { a:'up-google', b:'bgp-centro', real:true, iface:'72.14.204.232 (AS15169)', ping:'Establ · 17 flaps', traffic:'4.718 rotas aceitas' },
     { a:'up-cloudflare', b:'bgp-centro', real:true, iface:'187.16.208.188 (AS13335)', ping:'Establ (anômalo)', traffic:'8.120 recebidas / 0 aceitas' },
