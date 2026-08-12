@@ -983,8 +983,9 @@ const REAL_TOPO = {
       { id:'bgp-centro', label:'BGP-CENTRO', sub:'ANB-BRAS01-MX204 · 143.137.32.3', status:'ok', src:'REAL' },
       { id:'bgp-santarosa', label:'BGP-SANTA-ROSA', sub:'ANB-BRAS02-MX204 · 143.137.32.4', status:'warn', src:'REAL' },
     ]},
-    { title:'CORE — DIST. CENTRO', nodes:[
+    { title:'CORE — DIST. (CENTRO/STA.ROSA)', nodes:[
       { id:'sw-s6750-centro', label:'S6750-CENTRO', sub:'Huawei · 10.22.22.56 (LLDP)', status:'ok', src:'LLDP' },
+      { id:'sw-s6750-santarosa', label:'S6750-STA.ROSA', sub:'via ae0 · 100GE1/0/1-2 (LLDP)', status:'ok', src:'LLDP' },
     ]},
     { title:'CORE — MX204-CENTRO', nodes:[
       { id:'mx204-centro', label:'MX204-CENTRO', sub:'core · na real é CCR1072 · 143.137.32.29', status:'ok', src:'REAL' },
@@ -1015,6 +1016,7 @@ const REAL_TOPO = {
     { a:'up-akamai', b:'bgp-centro', real:true, ping:'Idle · Idle' },
     // REAL = vizinho confirmado por LLDP/MNDP nesta sessão, com ping/tráfego medido agora.
     { a:'bgp-centro', b:'sw-s6750-centro', real:true, iface:'et-0/0/1 (ae0) ↔ 100GE1/0/2', ping:'1 ms', traffic:'29.3 Gbps ↓ / 27.4 Gbps ↑' },
+    { a:'bgp-santarosa', b:'sw-s6750-santarosa', real:true, iface:'ae0 (et-0/0/0+1) ↔ 100GE1/0/1-2', ping:'2 input errors (ae0)', traffic:'19.08 Gbps ↓ / 18.91 Gbps ↑' },
     { a:'mx204-centro', b:'sw-s6730-santarosa', real:true, iface:'sfp-sfpplus1 ↔ XGE0/0/18', ping:'ICMP bloqueado (ACL mgmt)', traffic:'40.9 Mbps ↓ / 45.4 Mbps ↑' },
     { a:'rb450', b:'arroba-int6', real:true, iface:'ether2 → ether4', ping:'—', traffic:'1.4 kbps ↓ / 0.5 kbps ↑ (ocioso)' },
     { a:'rb450', b:'rb-cameras', real:true, iface:'bridge2/ether2', ping:'—', traffic:'1.0 kbps ↓ / 0.05 kbps ↑ (ocioso)' },
