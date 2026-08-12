@@ -422,7 +422,7 @@ svg.tree-svg{ display:block; margin:0 auto; min-width:900px; }
       <div class="panel" id="topologia">
         <h2>Topologia — hierarquia real de rede <span class="tag" style="background:rgba(52,211,153,0.15);color:var(--ok)">REAL — LLDP/MNDP (SSH + API RouterOS)</span> <span class="tag" style="margin-left:4px">upstream → core → última milha</span></h2>
         <div class="dev-meta" style="margin-bottom:6px">Links sólidos verdes = vizinho físico confirmado via LLDP/MNDP (com ping e tráfego coletados agora). Links pontilhados cinza = posição na hierarquia ainda sem prova direta de adjacência L2.</div>
-        <svg id="topo" viewBox="0 0 1060 340" style="width:100%; height:360px;"></svg>
+        <svg id="topo" viewBox="0 0 1220 460" style="width:100%; height:480px;"></svg>
       </div>
 
       <div class="panel">
@@ -970,6 +970,14 @@ const topoStatusColor = {ok:'#34D399', warn:'#F0A63A', crit:'#F0454F'};
 // MNDP/CDP (Mikrotik "/ip neighbor print"), ping e tráfego via SSH direto / API RouterOS (RB450).
 const REAL_TOPO = {
   cols: [
+    { title:'UPSTREAM (PEERS BGP)', nodes:[
+      { id:'up-forte', label:'FORTE (AS263009)', sub:'transit · full table', status:'ok', src:'REAL' },
+      { id:'up-tuddo', label:'TUDDO (AS268696)', sub:'transit · full table', status:'ok', src:'REAL' },
+      { id:'up-alfa', label:'ALFA TELECOM (AS264596)', sub:'transit · 209k rotas', status:'ok', src:'REAL' },
+      { id:'up-google', label:'Google (AS15169)', sub:'peering direto', status:'ok', src:'REAL' },
+      { id:'up-cloudflare', label:'Cloudflare (AS13335)', sub:'Establ mas 0 rotas aceitas!', status:'warn', src:'REAL' },
+      { id:'up-akamai', label:'Akamai (AS20940)', sub:'2 sessões DOWN (Idle)', status:'crit', src:'REAL' },
+    ]},
     { title:'UPSTREAM / PEERING', nodes:[
       { id:'bgp-centro', label:'BGP-CENTRO', sub:'peering · Junos MX204 · 143.137.32.3', status:'ok', src:'REAL' },
     ]},
@@ -992,6 +1000,13 @@ const REAL_TOPO = {
     ]},
   ],
   links: [
+    // REAL = peers BGP confirmados agora via "show bgp summary" no BGP-CENTRO.
+    { a:'up-forte', b:'bgp-centro', real:true, iface:'10.200.203.97 (AS263009)', ping:'Establ', traffic:'1.058.893 rotas aceitas' },
+    { a:'up-tuddo', b:'bgp-centro', real:true, iface:'172.20.255.254 (AS268696)', ping:'Establ', traffic:'1.086.252 rotas aceitas' },
+    { a:'up-alfa', b:'bgp-centro', real:true, iface:'138.59.40.33 (AS264596)', ping:'Establ', traffic:'209.052 rotas aceitas' },
+    { a:'up-google', b:'bgp-centro', real:true, iface:'72.14.204.232 (AS15169)', ping:'Establ · 17 flaps', traffic:'4.718 rotas aceitas' },
+    { a:'up-cloudflare', b:'bgp-centro', real:true, iface:'187.16.208.188 (AS13335)', ping:'Establ (anômalo)', traffic:'8.120 recebidas / 0 aceitas' },
+    { a:'up-akamai', b:'bgp-centro', real:true, iface:'64.191.233.65/.248 (AS20940)', ping:'Idle · Idle', traffic:'0 rotas (sessão caída)' },
     // REAL = vizinho confirmado por LLDP/MNDP nesta sessão, com ping/tráfego medido agora.
     { a:'bgp-centro', b:'sw-s6750-centro', real:true, iface:'et-0/0/1 (ae0) ↔ 100GE1/0/2', ping:'1 ms', traffic:'29.3 Gbps ↓ / 27.4 Gbps ↑' },
     { a:'mx204-centro', b:'sw-s6730-santarosa', real:true, iface:'sfp-sfpplus1 ↔ XGE0/0/18', ping:'ICMP bloqueado (ACL mgmt)', traffic:'40.9 Mbps ↓ / 45.4 Mbps ↑' },
@@ -1014,7 +1029,7 @@ function renderRealTopology(devices){
   };
   REAL_TOPO.cols.forEach(col => col.nodes.forEach(n => { n.status = matchStatus(n.label.split(' ')[0], n.status); }));
 
-  const width = 1060, height = 340, marginX = 70, topPad = 46;
+  const width = 1220, height = 460, marginX = 70, topPad = 46;
   const cols = REAL_TOPO.cols;
   const usableWidth = width - marginX*2;
   const colX = cols.map((_, i) => cols.length===1 ? width/2 : marginX + (usableWidth * i/(cols.length-1)));
@@ -1038,12 +1053,13 @@ function renderRealTopology(devices){
     const na = nodes.find(n=>n.id===l.a), nb = nodes.find(n=>n.id===l.b);
     if(!na || !nb) return;
     const midx = (na.x+nb.x)/2, midy = (na.y+nb.y)/2;
-    const color = l.real ? '#34D399' : '#6C7C8C';
+    const worse = (na.status==='crit'||nb.status==='crit') ? 'crit' : (na.status==='warn'||nb.status==='warn') ? 'warn' : 'ok';
+    const color = !l.real ? '#6C7C8C' : (worse==='crit' ? '#F0454F' : worse==='warn' ? '#F0A63A' : '#34D399');
     const dash = l.real ? '' : 'stroke-dasharray="4,4"';
     html += `<path d="M${na.x+42},${na.y} C${midx},${na.y} ${midx},${nb.y} ${nb.x-42},${nb.y}" fill="none" stroke="${color}" stroke-width="1.6" ${dash}/>`;
     if(l.real){
       const lines = [l.iface, [l.ping, l.traffic].filter(x=>x && x!=='—').join('  ·  ')].filter(Boolean);
-      html += `<g>` + lines.map((t,i)=>`<text x="${midx}" y="${midy - 8 + i*9}" text-anchor="middle" fill="#34D399" font-family="var(--mono)" font-size="7.5">${t}</text>`).join('') + `</g>`;
+      html += `<g>` + lines.map((t,i)=>`<text x="${midx}" y="${midy - 8 + i*9}" text-anchor="middle" fill="${color}" font-family="var(--mono)" font-size="7.5">${t}</text>`).join('') + `</g>`;
     } else {
       html += `<text x="${midx}" y="${midy-6}" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="7.5">inferido</text>`;
     }
