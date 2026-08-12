@@ -971,13 +971,13 @@ const topoStatusColor = {ok:'#34D399', warn:'#F0A63A', crit:'#F0454F'};
 const REAL_TOPO = {
   cols: [
     { title:'UPSTREAM (PEERS BGP)', nodes:[
-      { id:'up-forte', label:'FORTE (AS263009)', sub:'transit · full table · em ambos', status:'ok', src:'REAL' },
-      { id:'up-tuddo', label:'TUDDO (AS268696)', sub:'transit · degradado em Sta.Rosa', status:'warn', src:'REAL' },
-      { id:'up-ixbr', label:'IX.br / NIC.BR (AS26162)', sub:'peering PTT · em ambos', status:'ok', src:'REAL' },
-      { id:'up-alfa', label:'ALFA TELECOM (AS264596)', sub:'transit · só Centro · 209k rotas', status:'ok', src:'REAL' },
       { id:'up-google', label:'Google (AS15169)', sub:'peering direto · só Centro', status:'ok', src:'REAL' },
+      { id:'up-alfa', label:'ALFA TELECOM (AS264596)', sub:'transit · só Centro · 209k rotas', status:'ok', src:'REAL' },
       { id:'up-cloudflare', label:'Cloudflare (AS13335)', sub:'só Centro · Establ mas 0 rotas!', status:'warn', src:'REAL' },
       { id:'up-akamai', label:'Akamai (AS20940)', sub:'só Centro · 2 sessões DOWN', status:'crit', src:'REAL' },
+      { id:'up-forte', label:'FORTE (AS263009)', sub:'transit · full table · em ambos', status:'ok', src:'REAL' },
+      { id:'up-ixbr', label:'IX.br / NIC.BR (AS26162)', sub:'peering PTT · em ambos', status:'ok', src:'REAL' },
+      { id:'up-tuddo', label:'TUDDO (AS268696)', sub:'transit · degradado em Sta.Rosa', status:'warn', src:'REAL' },
     ]},
     { title:'UPSTREAM / PEERING (2 BGPs)', nodes:[
       { id:'bgp-centro', label:'BGP-CENTRO', sub:'ANB-BRAS01-MX204 · 143.137.32.3', status:'ok', src:'REAL' },
